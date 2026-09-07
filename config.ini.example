@@ -1,0 +1,7 @@
+# Copy this file to config.ini and set your location.
+# The real config.ini is ignored by Git because future sections may contain API credentials.
+
+[location]
+latitude = -22.9068
+longitude = -43.1729
+aircraft_radius_km = 50

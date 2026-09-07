@@ -65,7 +65,8 @@ public final class ScreenDuoApplication {
                 }
             }
         } catch (IOException exception) {
-            System.err.println("Unable to query remote data: " + exception.getMessage());
+            System.err.println("Unable to read configuration or query remote data: "
+                    + exception.getMessage());
             System.exit(1);
         } catch (LibUsbException | IllegalStateException | IllegalArgumentException exception) {
             System.err.println("Unable to run ScreenDUO Radar: " + exception.getMessage());
@@ -77,7 +78,7 @@ public final class ScreenDuoApplication {
     }
 
     private static void testApis() throws IOException, InterruptedException {
-        ApplicationConfig config = ApplicationConfig.fromEnvironment();
+        ApplicationConfig config = ApplicationConfig.fromDefaultFile();
         WeatherProvider weatherProvider = new OpenMeteoWeatherProvider();
         AircraftProvider aircraftProvider = new OpenSkyAircraftProvider();
 

@@ -3,16 +3,26 @@ package io.github.mmilk23.screenduo.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.Map;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class ApplicationConfigTest {
 
+    @TempDir
+    Path temporaryDirectory;
+
     @Test
-    void readsLocationAndUsesDefaultRadius() {
-        ApplicationConfig config = ApplicationConfig.fromEnvironment(Map.of(
-                "SCREENDUO_LATITUDE", "-22.9068",
-                "SCREENDUO_LONGITUDE", "-43.1729"));
+    void readsLocationAndUsesDefaultRadius() throws IOException {
+        Path file = writeConfig("""
+                [location]
+                latitude = -22.9068
+                longitude = -43.1729
+                """);
+
+        ApplicationConfig config = ApplicationConfig.fromFile(file);
 
         assertEquals(-22.9068, config.location().latitude());
         assertEquals(-43.1729, config.location().longitude());
@@ -20,8 +30,26 @@ class ApplicationConfigTest {
     }
 
     @Test
-    void rejectsMissingLocation() {
+    void readsConfiguredRadius() throws IOException {
+        Path file = writeConfig("""
+                [location]
+                latitude = -22.9068
+                longitude = -43.1729
+                aircraft_radius_km = 75
+                """);
+
+        assertEquals(75.0, ApplicationConfig.fromFile(file).aircraftRadiusKm());
+    }
+
+    @Test
+    void rejectsMissingLocation() throws IOException {
+        Path file = writeConfig("[location]\n");
+
         assertThrows(IllegalArgumentException.class,
-                () -> ApplicationConfig.fromEnvironment(Map.of()));
+                () -> ApplicationConfig.fromFile(file));
+    }
+
+    private Path writeConfig(String content) throws IOException {
+        return Files.writeString(temporaryDirectory.resolve("config.ini"), content);
     }
 }

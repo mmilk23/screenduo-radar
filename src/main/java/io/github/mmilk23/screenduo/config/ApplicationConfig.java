@@ -1,41 +1,33 @@
 package io.github.mmilk23.screenduo.config;
 
 import io.github.mmilk23.screenduo.location.GeoPoint;
-import java.util.Map;
+import java.io.IOException;
+import java.nio.file.Path;
 
 public record ApplicationConfig(GeoPoint location, double aircraftRadiusKm) {
 
-    private static final String LATITUDE = "SCREENDUO_LATITUDE";
-    private static final String LONGITUDE = "SCREENDUO_LONGITUDE";
-    private static final String RADIUS = "SCREENDUO_RADIUS_KM";
+    public static final Path DEFAULT_PATH = Path.of("config.ini");
+    private static final String LATITUDE = "location.latitude";
+    private static final String LONGITUDE = "location.longitude";
+    private static final String RADIUS = "location.aircraft_radius_km";
     private static final double DEFAULT_RADIUS_KM = 50.0;
 
-    public static ApplicationConfig fromEnvironment() {
-        return fromEnvironment(System.getenv());
+    public static ApplicationConfig fromDefaultFile() throws IOException {
+        return fromFile(DEFAULT_PATH);
     }
 
-    static ApplicationConfig fromEnvironment(Map<String, String> environment) {
-        double latitude = requiredDouble(environment, LATITUDE);
-        double longitude = requiredDouble(environment, LONGITUDE);
-        double radius = optionalDouble(environment, RADIUS, DEFAULT_RADIUS_KM);
+    public static ApplicationConfig fromFile(Path path) throws IOException {
+        IniConfig config = IniConfig.load(path);
+        double latitude = parseDouble(LATITUDE, config.required(LATITUDE));
+        double longitude = parseDouble(LONGITUDE, config.required(LONGITUDE));
+        double radius = parseDouble(
+                RADIUS, config.optional(RADIUS, Double.toString(DEFAULT_RADIUS_KM)));
+
         if (!Double.isFinite(radius) || radius <= 0.0 || radius > 1_000.0) {
-            throw new IllegalArgumentException(RADIUS + " must be greater than 0 and at most 1000.");
+            throw new IllegalArgumentException(
+                    RADIUS + " must be greater than 0 and at most 1000.");
         }
         return new ApplicationConfig(new GeoPoint(latitude, longitude), radius);
-    }
-
-    private static double requiredDouble(Map<String, String> environment, String name) {
-        String value = environment.get(name);
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("Environment variable " + name + " is required.");
-        }
-        return parseDouble(name, value);
-    }
-
-    private static double optionalDouble(
-            Map<String, String> environment, String name, double defaultValue) {
-        String value = environment.get(name);
-        return value == null || value.isBlank() ? defaultValue : parseDouble(name, value);
     }
 
     private static double parseDouble(String name, String value) {

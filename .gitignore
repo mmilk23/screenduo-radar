@@ -22,6 +22,7 @@ hs_err_pid*
 
 # Local configuration and secrets
 .env
+config.ini
 config.yaml
 
 # Operating systems
