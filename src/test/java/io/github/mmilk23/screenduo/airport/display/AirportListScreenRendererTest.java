@@ -1,7 +1,6 @@
 package io.github.mmilk23.screenduo.airport.display;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.mmilk23.screenduo.airport.NearbyAirport;
 import io.github.mmilk23.screenduo.display.DisplayGeometry;
@@ -27,7 +26,9 @@ class AirportListScreenRendererTest {
                 new AirportListScreenData(airports, 5));
 
         assertEquals(320 * 240 * 3, frame.pixels().length);
-        assertTrue(frame.blueAt(20, 45) > 100);
+        assertEquals(53, frame.redAt(20, 40));
+        assertEquals(200, frame.greenAt(20, 40));
+        assertEquals(255, frame.blueAt(20, 40));
     }
 
     @Test
