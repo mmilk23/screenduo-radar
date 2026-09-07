@@ -7,9 +7,10 @@ import io.github.mmilk23.screenduo.display.RgbColor;
 import io.github.mmilk23.screenduo.display.RgbFrame;
 import io.github.mmilk23.screenduo.display.ScreenRenderer;
 import io.github.mmilk23.screenduo.weather.WeatherConditions;
+import java.text.Normalizer;
 import java.util.Locale;
 
-public final class WeatherScreenRenderer implements ScreenRenderer<WeatherConditions> {
+public final class WeatherScreenRenderer implements ScreenRenderer<WeatherScreenData> {
 
     private static final DisplayGeometry DASHBOARD_GEOMETRY = new DisplayGeometry(320, 240);
     private static final RgbColor BACKGROUND = new RgbColor(5, 12, 28);
@@ -22,15 +23,16 @@ public final class WeatherScreenRenderer implements ScreenRenderer<WeatherCondit
     private static final RgbColor RAIN = new RgbColor(70, 160, 255);
 
     @Override
-    public RgbFrame render(DisplayGeometry geometry, WeatherConditions weather) {
-        RgbFrame dashboard = renderDashboard(weather);
+    public RgbFrame render(DisplayGeometry geometry, WeatherScreenData data) {
+        RgbFrame dashboard = renderDashboard(data);
         if (DASHBOARD_GEOMETRY.equals(geometry)) {
             return dashboard;
         }
         return FrameScaler.fit(dashboard, geometry, BACKGROUND);
     }
 
-    private static RgbFrame renderDashboard(WeatherConditions weather) {
+    private static RgbFrame renderDashboard(WeatherScreenData data) {
+        WeatherConditions weather = data.conditions();
         RgbFrame frame = new RgbFrame(DASHBOARD_GEOMETRY);
         FrameCanvas canvas = new FrameCanvas(frame);
         canvas.clear(BACKGROUND);
@@ -40,6 +42,7 @@ public final class WeatherScreenRenderer implements ScreenRenderer<WeatherCondit
 
         canvas.drawText(temperature(weather.temperatureCelsius()), 15, 49, 4, PRIMARY);
         canvas.drawText(description(weather.weatherCode()), 17, 87, 2, ACCENT);
+        canvas.drawText(cityLabel(data.city()), 17, 106, 1, SECONDARY);
         drawWeatherIcon(canvas, weather.weatherCode(), DASHBOARD_GEOMETRY.width() - 57, 72);
 
         canvas.fillRectangle(10, 119, DASHBOARD_GEOMETRY.width() - 20, 1, SECONDARY);
@@ -141,6 +144,16 @@ public final class WeatherScreenRenderer implements ScreenRenderer<WeatherCondit
         canvas.fillCircle(centerX, centerY - 5, 15, SECONDARY);
         canvas.fillCircle(centerX + 15, centerY + 3, 10, SECONDARY);
         canvas.fillRectangle(centerX - 24, centerY, 48, 13, SECONDARY);
+    }
+
+    private static String cityLabel(String city) {
+        String normalized = Normalizer.normalize(city, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toUpperCase(Locale.ROOT);
+        int maximumLength = 42;
+        return normalized.length() <= maximumLength
+                ? normalized
+                : normalized.substring(0, maximumLength - 3) + "...";
     }
 
     private static String temperature(Double value) {

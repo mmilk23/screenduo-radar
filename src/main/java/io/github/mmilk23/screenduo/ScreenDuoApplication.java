@@ -14,6 +14,7 @@ import io.github.mmilk23.screenduo.display.DisplayButtonEvent;
 import io.github.mmilk23.screenduo.display.DisplayControls;
 import io.github.mmilk23.screenduo.weather.WeatherConditions;
 import io.github.mmilk23.screenduo.weather.WeatherProvider;
+import io.github.mmilk23.screenduo.weather.display.WeatherScreenData;
 import io.github.mmilk23.screenduo.weather.display.WeatherScreenRenderer;
 import io.github.mmilk23.screenduo.weather.openmeteo.OpenMeteoWeatherProvider;
 import java.io.IOException;
@@ -44,7 +45,7 @@ public final class ScreenDuoApplication {
             }
 
             boolean weatherScreenRequested = hasArgument(args, WEATHER_SCREEN_ARGUMENT);
-            WeatherConditions weather = weatherScreenRequested ? loadWeather() : null;
+            WeatherScreenData weatherScreen = weatherScreenRequested ? loadWeatherScreen() : null;
 
             Optional<ScreenDuoDevice> detectedDevice = ScreenDuoDevice.open();
             if (detectedDevice.isEmpty()) {
@@ -67,7 +68,7 @@ public final class ScreenDuoApplication {
                     showTestPattern(device);
                 }
                 if (weatherScreenRequested) {
-                    showWeather(device, weather);
+                    showWeather(device, weatherScreen);
                 }
                 if (buttonTestRequested) {
                     testButtons(device);
@@ -90,10 +91,12 @@ public final class ScreenDuoApplication {
         }
     }
 
-    private static WeatherConditions loadWeather() throws IOException, InterruptedException {
+    private static WeatherScreenData loadWeatherScreen()
+            throws IOException, InterruptedException {
         ApplicationConfig config = ApplicationConfig.fromDefaultFile();
         WeatherProvider weatherProvider = new OpenMeteoWeatherProvider();
-        return weatherProvider.currentConditions(config.location());
+        WeatherConditions conditions = weatherProvider.currentConditions(config.location());
+        return new WeatherScreenData(config.city(), conditions);
     }
 
     private static void testApis() throws IOException, InterruptedException {
@@ -103,7 +106,8 @@ public final class ScreenDuoApplication {
         AirportProvider airportProvider = new OurAirportsAirportProvider();
 
         System.out.printf(Locale.ROOT,
-                "Location: %.6f, %.6f | aircraft radius: %.1f km | airport radius: %.1f km%n",
+                "Location: %s | %.6f, %.6f | aircraft radius: %.1f km | airport radius: %.1f km%n",
+                config.city(),
                 config.location().latitude(),
                 config.location().longitude(),
                 config.aircraftRadiusKm(),
@@ -205,8 +209,8 @@ public final class ScreenDuoApplication {
         System.out.println("Classic TV test pattern sent successfully.");
     }
 
-    private static void showWeather(Display display, WeatherConditions weather) {
-        display.show(new WeatherScreenRenderer().render(display.geometry(), weather));
+    private static void showWeather(Display display, WeatherScreenData weatherScreen) {
+        display.show(new WeatherScreenRenderer().render(display.geometry(), weatherScreen));
         System.out.println("Current weather screen sent successfully.");
     }
 

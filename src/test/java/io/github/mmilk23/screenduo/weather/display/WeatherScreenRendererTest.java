@@ -17,7 +17,9 @@ class WeatherScreenRendererTest {
     @Test
     void rendersWeatherAtScreenDuoResolution() {
         RgbFrame frame =
-                new WeatherScreenRenderer().render(new DisplayGeometry(320, 240), WEATHER);
+                new WeatherScreenRenderer().render(
+                        new DisplayGeometry(320, 240),
+                        new WeatherScreenData("São Paulo", WEATHER));
 
         assertEquals(320 * 240 * 3, frame.pixels().length);
         assertTrue(nonBlackPixels(frame) > 20_000);
@@ -27,7 +29,8 @@ class WeatherScreenRendererTest {
     void scalesDashboardForAnotherDisplay() {
         DisplayGeometry geometry = new DisplayGeometry(640, 360);
 
-        RgbFrame frame = new WeatherScreenRenderer().render(geometry, WEATHER);
+        RgbFrame frame = new WeatherScreenRenderer().render(
+                geometry, new WeatherScreenData("New York", WEATHER));
 
         assertEquals(geometry, frame.geometry());
         assertEquals(640 * 360 * 3, frame.pixels().length);

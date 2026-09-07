@@ -16,6 +16,7 @@ Edit `config.ini` with your location:
 [location]
 latitude = -22.9068
 longitude = -43.1729
+city = Rio de Janeiro
 aircraft_radius_km = 50
 airport_radius_km = 100
 ```

@@ -26,6 +26,7 @@ class ApplicationConfigTest {
 
         assertEquals(-22.9068, config.location().latitude());
         assertEquals(-43.1729, config.location().longitude());
+        assertEquals("LOCATION", config.city());
         assertEquals(50.0, config.aircraftRadiusKm());
         assertEquals(100.0, config.airportRadiusKm());
     }
@@ -36,12 +37,14 @@ class ApplicationConfigTest {
                 [location]
                 latitude = -22.9068
                 longitude = -43.1729
+                city = Rio de Janeiro
                 aircraft_radius_km = 75
                 airport_radius_km = 125
                 """);
 
         ApplicationConfig config = ApplicationConfig.fromFile(file);
 
+        assertEquals("Rio de Janeiro", config.city());
         assertEquals(75.0, config.aircraftRadiusKm());
         assertEquals(125.0, config.airportRadiusKm());
     }
