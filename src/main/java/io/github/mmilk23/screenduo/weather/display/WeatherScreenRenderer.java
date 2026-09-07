@@ -37,12 +37,11 @@ public final class WeatherScreenRenderer implements ScreenRenderer<WeatherScreen
         FrameCanvas canvas = new FrameCanvas(frame);
         canvas.clear(BACKGROUND);
         canvas.fillRectangle(0, 0, DASHBOARD_GEOMETRY.width(), 34, HEADER);
-        canvas.drawText("WEATHER", 12, 8, 3, PRIMARY);
+        drawCityTitle(canvas, data.city());
         canvas.drawText("LIVE", DASHBOARD_GEOMETRY.width() - 31, 13, 1, ACCENT);
 
         canvas.drawText(temperature(weather.temperatureCelsius()), 15, 49, 4, PRIMARY);
         canvas.drawText(description(weather.weatherCode()), 17, 87, 2, ACCENT);
-        canvas.drawText(cityLabel(data.city()), 17, 106, 1, SECONDARY);
         drawWeatherIcon(canvas, weather.weatherCode(), DASHBOARD_GEOMETRY.width() - 57, 72);
 
         canvas.fillRectangle(10, 119, DASHBOARD_GEOMETRY.width() - 20, 1, SECONDARY);
@@ -146,14 +145,30 @@ public final class WeatherScreenRenderer implements ScreenRenderer<WeatherScreen
         canvas.fillRectangle(centerX - 24, centerY, 48, 13, SECONDARY);
     }
 
-    private static String cityLabel(String city) {
-        String normalized = Normalizer.normalize(city, Normalizer.Form.NFD)
+    private static void drawCityTitle(FrameCanvas canvas, String city) {
+        String label = normalizeCity(city);
+        int maximumWidth = 267;
+        int scale = canvas.textWidth(label, 3) <= maximumWidth
+                ? 3
+                : canvas.textWidth(label, 2) <= maximumWidth ? 2 : 1;
+
+        int maximumCharacters = (maximumWidth + scale) / (6 * scale);
+        if (label.length() > maximumCharacters) {
+            label = label.substring(0, maximumCharacters - 3) + "...";
+        }
+
+        int y = switch (scale) {
+            case 3 -> 8;
+            case 2 -> 10;
+            default -> 13;
+        };
+        canvas.drawText(label, 12, y, scale, PRIMARY);
+    }
+
+    private static String normalizeCity(String city) {
+        return Normalizer.normalize(city, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}+", "")
                 .toUpperCase(Locale.ROOT);
-        int maximumLength = 42;
-        return normalized.length() <= maximumLength
-                ? normalized
-                : normalized.substring(0, maximumLength - 3) + "...";
     }
 
     private static String temperature(Double value) {

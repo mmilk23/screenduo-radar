@@ -31,7 +31,7 @@ Query Open-Meteo and send the current weather dashboard to the connected display
 mvn exec:java "-Dexec.args=--weather-screen"
 ```
 
-The renderer creates a native RGB frame without Swing or JavaFX. Its 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
+The city name is used as the dashboard title and automatically scaled to the available width. The renderer creates a native RGB frame without Swing or JavaFX. Its 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
 
 ## API smoke test
 
