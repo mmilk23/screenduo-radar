@@ -2,6 +2,7 @@ package io.github.mmilk23.screenduo.device;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.mmilk23.screenduo.display.RgbFrame;
 import java.nio.ByteBuffer;
@@ -49,5 +50,31 @@ class ScreenDuoProtocolTest {
         assertEquals(
                 512,
                 ScreenDuoProtocol.imageBlockFooter(1024, 230432, 0).length);
+    }
+
+    @Test
+    void createsButtonPollingCommand() {
+        byte[] command = ScreenDuoProtocol.buttonPollCommand();
+
+        assertEquals(31, command.length);
+        assertEquals(0x80, Byte.toUnsignedInt(command[12]));
+        assertArrayEquals(
+                new byte[] {(byte) 0xe7, 0x03},
+                new byte[] {command[15], command[16]});
+        assertArrayEquals(
+                new byte[] {0x00, 0x00, 0x01, 0x00},
+                new byte[] {command[17], command[18], command[19], command[20]});
+    }
+
+    @Test
+    void decodesLastButtonFromValidResponse() {
+        byte[] response = {3, 0, 8, 0, 10, 0, 0, 0, 12, 13};
+
+        assertEquals(13, ScreenDuoProtocol.decodeLastButtonCode(response).orElseThrow());
+    }
+
+    @Test
+    void ignoresResponseWithInvalidHeader() {
+        assertTrue(ScreenDuoProtocol.decodeLastButtonCode(new byte[] {1, 2, 3}).isEmpty());
     }
 }

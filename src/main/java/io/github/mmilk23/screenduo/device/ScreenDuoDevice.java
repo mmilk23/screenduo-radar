@@ -1,6 +1,8 @@
 package io.github.mmilk23.screenduo.device;
 
 import io.github.mmilk23.screenduo.display.Display;
+import io.github.mmilk23.screenduo.display.DisplayButtonEvent;
+import io.github.mmilk23.screenduo.display.DisplayControls;
 import io.github.mmilk23.screenduo.display.DisplayGeometry;
 import io.github.mmilk23.screenduo.display.RgbFrame;
 import java.nio.ByteBuffer;
@@ -15,7 +17,7 @@ import org.usb4java.DeviceList;
 import org.usb4java.LibUsb;
 import org.usb4java.LibUsbException;
 
-public final class ScreenDuoDevice implements Display {
+public final class ScreenDuoDevice implements Display, DisplayControls {
 
     public static final short VENDOR_ID = (short) 0x1043;
     public static final short PRODUCT_ID = (short) 0x3100;
@@ -28,6 +30,8 @@ public final class ScreenDuoDevice implements Display {
     private static final long COMMAND_TIMEOUT_MILLIS = 1_000;
     private static final long DATA_TIMEOUT_MILLIS = 5_000;
     private static final long STATUS_TIMEOUT_MILLIS = 2_000;
+    private static final long BUTTON_TIMEOUT_MILLIS = 500;
+    private static final long BUTTON_DRAIN_TIMEOUT_MILLIS = 100;
 
     private final Context context;
     private final DeviceHandle handle;
@@ -112,6 +116,27 @@ public final class ScreenDuoDevice implements Display {
     }
 
     @Override
+    public Optional<DisplayButtonEvent> pollButton() {
+        ensureOpen();
+        writeExact(
+                ScreenDuoProtocol.buttonPollCommand(),
+                COMMAND_TIMEOUT_MILLIS,
+                "Unable to request ScreenDUO button state");
+
+        byte[] response = readOptional(
+                ScreenDuoProtocol.BUTTON_RESPONSE_SIZE, BUTTON_TIMEOUT_MILLIS);
+
+        int result = LibUsb.clearHalt(handle, READ_ENDPOINT);
+        ensureSuccess(result, "Unable to clear ScreenDUO button endpoint");
+        readOptional(ScreenDuoProtocol.FOOTER_SIZE, BUTTON_DRAIN_TIMEOUT_MILLIS);
+
+        return ScreenDuoProtocol.decodeLastButtonCode(response)
+                .stream()
+                .mapToObj(ScreenDuoButtonMapper::map)
+                .findFirst();
+    }
+
+    @Override
     public void close() {
         if (closed) {
             return;
@@ -141,6 +166,23 @@ public final class ScreenDuoDevice implements Display {
             throw new IllegalStateException(
                     message + ": expected " + length + " bytes, wrote " + transferredBytes);
         }
+    }
+
+    private byte[] readOptional(int capacity, long timeout) {
+        ByteBuffer buffer = BufferUtils.allocateByteBuffer(capacity);
+        IntBuffer transferred = BufferUtils.allocateIntBuffer();
+        int result = LibUsb.bulkTransfer(handle, READ_ENDPOINT, buffer, transferred, timeout);
+
+        if (result == LibUsb.ERROR_TIMEOUT || result == LibUsb.ERROR_PIPE) {
+            return new byte[0];
+        }
+        ensureSuccess(result, "Unable to read ScreenDUO button data");
+
+        int transferredBytes = transferred.get(0);
+        byte[] response = new byte[transferredBytes];
+        buffer.rewind();
+        buffer.get(response);
+        return response;
     }
 
     private void readStatus() {

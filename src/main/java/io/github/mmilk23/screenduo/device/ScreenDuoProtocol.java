@@ -4,6 +4,7 @@ import io.github.mmilk23.screenduo.display.DisplayGeometry;
 import io.github.mmilk23.screenduo.display.RgbFrame;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.OptionalInt;
 
 final class ScreenDuoProtocol {
 
@@ -13,10 +14,13 @@ final class ScreenDuoProtocol {
     static final int COMMAND_SIZE = 31;
     static final int STATUS_SIZE = 13;
     static final int FOOTER_SIZE = 512;
+    static final int BUTTON_RESPONSE_SIZE = 256;
 
     private static final int COMMAND_SIGNATURE = 0x43425355;
     private static final int IMAGE_TAG = 0x843d84a0;
+    private static final int BUTTON_TAG = 0xe6abb010;
     private static final short IMAGE_COMMAND = (short) 0x02e6;
+    private static final short BUTTON_COMMAND = (short) 0x03e7;
 
     private ScreenDuoProtocol() {
     }
@@ -52,7 +56,8 @@ final class ScreenDuoProtocol {
 
     static byte[] imageBlockCommand(int blockLength, int totalLength, int blockIndex) {
         validateBlock(blockLength, totalLength, blockIndex);
-        ByteBuffer command = commandPrefix(blockLength);
+        ByteBuffer command = ByteBuffer.allocate(COMMAND_SIZE).order(ByteOrder.LITTLE_ENDIAN);
+        putCommandPrefix(command, IMAGE_TAG, blockLength, (byte) 0);
         command.putShort(IMAGE_COMMAND);
         putNetworkOrderInt(command, blockLength);
         putNetworkOrderInt(command, totalLength);
@@ -65,7 +70,7 @@ final class ScreenDuoProtocol {
     static byte[] imageBlockFooter(int blockLength, int totalLength, int blockIndex) {
         validateBlock(blockLength, totalLength, blockIndex);
         ByteBuffer footer = ByteBuffer.allocate(FOOTER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
-        putCommandPrefix(footer, blockLength);
+        putCommandPrefix(footer, IMAGE_TAG, blockLength, (byte) 0);
         footer.putShort(IMAGE_COMMAND);
         putNetworkOrderInt(footer, blockLength);
         putNetworkOrderInt(footer, totalLength);
@@ -74,17 +79,41 @@ final class ScreenDuoProtocol {
         return footer.array();
     }
 
-    private static ByteBuffer commandPrefix(int blockLength) {
+    static byte[] buttonPollCommand() {
         ByteBuffer command = ByteBuffer.allocate(COMMAND_SIZE).order(ByteOrder.LITTLE_ENDIAN);
-        putCommandPrefix(command, blockLength);
-        return command;
+        putCommandPrefix(command, BUTTON_TAG, BUTTON_RESPONSE_SIZE, (byte) 0x80);
+        command.putShort(BUTTON_COMMAND);
+        putNetworkOrderInt(command, BUTTON_RESPONSE_SIZE);
+        putNetworkOrderInt(command, 0);
+        command.put((byte) 0);
+        command.put((byte) 0);
+        command.putInt(0);
+        return command.array();
     }
 
-    private static void putCommandPrefix(ByteBuffer target, int blockLength) {
+    static OptionalInt decodeLastButtonCode(byte[] response) {
+        if (response.length < 8
+                || response[0] != 3
+                || response[1] != 0
+                || response[2] != 8
+                || response[3] != 0) {
+            return OptionalInt.empty();
+        }
+
+        int declaredLength = Byte.toUnsignedInt(response[4]);
+        if (declaredLength != response.length || declaredLength <= 8) {
+            return OptionalInt.empty();
+        }
+
+        return OptionalInt.of(Byte.toUnsignedInt(response[declaredLength - 1]));
+    }
+
+    private static void putCommandPrefix(
+            ByteBuffer target, int tag, int transferLength, byte flags) {
         target.putInt(COMMAND_SIGNATURE);
-        target.putInt(IMAGE_TAG);
-        target.putInt(blockLength);
-        target.put((byte) 0);
+        target.putInt(tag);
+        target.putInt(transferLength);
+        target.put(flags);
         target.put((byte) 0);
         target.put((byte) 0x0c);
     }
