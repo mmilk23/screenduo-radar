@@ -3,6 +3,7 @@ package io.github.mmilk23.screenduo;
 import io.github.mmilk23.screenduo.aircraft.AircraftProvider;
 import io.github.mmilk23.screenduo.aircraft.NearbyAircraft;
 import io.github.mmilk23.screenduo.aircraft.opensky.OpenSkyAircraftProvider;
+import io.github.mmilk23.screenduo.airport.AirportBrowserController;
 import io.github.mmilk23.screenduo.airport.AirportProvider;
 import io.github.mmilk23.screenduo.airport.NearbyAirport;
 import io.github.mmilk23.screenduo.airport.ourairports.OurAirportsAirportProvider;
@@ -30,6 +31,7 @@ public final class ScreenDuoApplication {
 
     private static final String API_TEST_ARGUMENT = "--api-test";
     private static final String WEATHER_SCREEN_ARGUMENT = "--weather-screen";
+    private static final String AIRPORT_SCREEN_ARGUMENT = "--airport-screen";
     private static final String TEST_PATTERN_ARGUMENT = "--test-pattern";
     private static final String BUTTON_TEST_ARGUMENT = "--button-test";
     private static final Duration BUTTON_TEST_DURATION = Duration.ofSeconds(30);
@@ -44,7 +46,11 @@ public final class ScreenDuoApplication {
                 return;
             }
 
-            boolean weatherScreenRequested = hasArgument(args, WEATHER_SCREEN_ARGUMENT);
+            boolean airportScreenRequested = hasArgument(args, AIRPORT_SCREEN_ARGUMENT);
+            List<NearbyAirport> browserAirports =
+                    airportScreenRequested ? loadNearbyAirports() : List.of();
+            boolean weatherScreenRequested =
+                    !airportScreenRequested && hasArgument(args, WEATHER_SCREEN_ARGUMENT);
             WeatherScreenData weatherScreen = weatherScreenRequested ? loadWeatherScreen() : null;
 
             Optional<ScreenDuoDevice> detectedDevice = ScreenDuoDevice.open();
@@ -61,6 +67,15 @@ public final class ScreenDuoApplication {
                         Short.toUnsignedInt(ScreenDuoDevice.PRODUCT_ID));
                 System.out.print(device.descriptorReport());
 
+                if (airportScreenRequested) {
+                    new AirportBrowserController(
+                            device,
+                            device,
+                            browserAirports,
+                            new OpenMeteoWeatherProvider()).run();
+                    return;
+                }
+
                 boolean testPatternRequested = hasArgument(args, TEST_PATTERN_ARGUMENT);
                 boolean buttonTestRequested = hasArgument(args, BUTTON_TEST_ARGUMENT);
 
@@ -75,7 +90,7 @@ public final class ScreenDuoApplication {
                 }
                 if (!testPatternRequested && !buttonTestRequested && !weatherScreenRequested) {
                     System.out.println("Diagnostic mode only. Use --test-pattern, --button-test, "
-                            + "--weather-screen or --api-test.");
+                            + "--weather-screen, --airport-screen or --api-test.");
                 }
             }
         } catch (IOException exception) {
@@ -89,6 +104,19 @@ public final class ScreenDuoApplication {
             Thread.currentThread().interrupt();
             System.err.println("Operation interrupted.");
         }
+    }
+
+    private static List<NearbyAirport> loadNearbyAirports()
+            throws IOException, InterruptedException {
+        ApplicationConfig config = ApplicationConfig.fromDefaultFile();
+        AirportProvider airportProvider = new OurAirportsAirportProvider();
+        List<NearbyAirport> airports =
+                airportProvider.findNearby(config.location(), config.airportRadiusKm());
+        System.out.printf(Locale.ROOT,
+                "Loaded %d relevant airports inside %.1f km.%n",
+                airports.size(),
+                config.airportRadiusKm());
+        return airports;
     }
 
     private static WeatherScreenData loadWeatherScreen()

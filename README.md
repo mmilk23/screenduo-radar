@@ -33,6 +33,22 @@ mvn exec:java "-Dexec.args=--weather-screen"
 
 The city name is used as the dashboard title and automatically scaled to the available width. The renderer creates a native RGB frame without Swing or JavaFX. Its 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
 
+## Nearby-airport browser
+
+Load nearby airports and keep the application running for button navigation:
+
+```powershell
+mvn exec:java "-Dexec.args=--airport-screen"
+```
+
+Controls:
+
+- `UP` and `DOWN`: move the highlighted selection;
+- `CONFIRM`: query and display current weather at the selected airport;
+- `BACK`: return from weather to the list, or exit while already on the list.
+
+The list shows five airports per page. Button input is debounced to avoid multiple moves from a single physical press. Scheduled arrivals and departures will be added later behind a separate flight-schedule provider.
+
 ## API smoke test
 
 ```powershell
