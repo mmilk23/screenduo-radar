@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.mmilk23.screenduo.aircraft.AircraftProvider;
 import io.github.mmilk23.screenduo.aircraft.NearbyAircraft;
+import io.github.mmilk23.screenduo.airline.AirlineResolver;
+import io.github.mmilk23.screenduo.airline.openflights.OpenFlightsAirlineResolver;
 import io.github.mmilk23.screenduo.location.BoundingBox;
 import io.github.mmilk23.screenduo.location.GeoMath;
 import io.github.mmilk23.screenduo.location.GeoPoint;
@@ -22,15 +24,21 @@ public final class OpenSkyAircraftProvider implements AircraftProvider {
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final AirlineResolver airlineResolver;
 
     public OpenSkyAircraftProvider() {
         this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
-                new ObjectMapper());
+                new ObjectMapper(),
+                new OpenFlightsAirlineResolver());
     }
 
-    OpenSkyAircraftProvider(HttpClient httpClient, ObjectMapper objectMapper) {
+    OpenSkyAircraftProvider(
+            HttpClient httpClient,
+            ObjectMapper objectMapper,
+            AirlineResolver airlineResolver) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
+        this.airlineResolver = airlineResolver;
     }
 
     @Override
@@ -77,11 +85,13 @@ public final class OpenSkyAircraftProvider implements AircraftProvider {
         return objectMapper.readTree(response.body());
     }
 
-    private static NearbyAircraft map(GeoPoint center, JsonNode state) {
+    private NearbyAircraft map(GeoPoint center, JsonNode state)
+            throws IOException, InterruptedException {
         if (!state.isArray() || state.size() < 17
                 || !state.path(5).isNumber() || !state.path(6).isNumber()) {
             return null;
         }
+        String callsign = text(state, 1);
         GeoPoint position = new GeoPoint(state.path(6).doubleValue(), state.path(5).doubleValue());
         double distance = GeoMath.distanceKm(center, position);
         Double altitude = number(state, 13);
@@ -92,7 +102,8 @@ public final class OpenSkyAircraftProvider implements AircraftProvider {
 
         return new NearbyAircraft(
                 text(state, 0),
-                text(state, 1),
+                callsign,
+                airlineResolver.resolve(callsign).orElse(""),
                 text(state, 2),
                 position,
                 distance,

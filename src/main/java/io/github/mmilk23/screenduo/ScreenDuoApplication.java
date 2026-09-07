@@ -3,6 +3,9 @@ package io.github.mmilk23.screenduo;
 import io.github.mmilk23.screenduo.aircraft.AircraftProvider;
 import io.github.mmilk23.screenduo.aircraft.NearbyAircraft;
 import io.github.mmilk23.screenduo.aircraft.opensky.OpenSkyAircraftProvider;
+import io.github.mmilk23.screenduo.airport.AirportProvider;
+import io.github.mmilk23.screenduo.airport.NearbyAirport;
+import io.github.mmilk23.screenduo.airport.ourairports.OurAirportsAirportProvider;
 import io.github.mmilk23.screenduo.config.ApplicationConfig;
 import io.github.mmilk23.screenduo.device.ScreenDuoDevice;
 import io.github.mmilk23.screenduo.display.ClassicTvTestPattern;
@@ -17,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.usb4java.LibUsbException;
 
@@ -45,6 +49,7 @@ public final class ScreenDuoApplication {
 
             try (ScreenDuoDevice device = detectedDevice.orElseThrow()) {
                 System.out.printf(
+                        Locale.ROOT,
                         "ScreenDUO detected and opened successfully (%04x:%04x).%n",
                         Short.toUnsignedInt(ScreenDuoDevice.VENDOR_ID),
                         Short.toUnsignedInt(ScreenDuoDevice.PRODUCT_ID));
@@ -81,20 +86,23 @@ public final class ScreenDuoApplication {
         ApplicationConfig config = ApplicationConfig.fromDefaultFile();
         WeatherProvider weatherProvider = new OpenMeteoWeatherProvider();
         AircraftProvider aircraftProvider = new OpenSkyAircraftProvider();
+        AirportProvider airportProvider = new OurAirportsAirportProvider();
 
-        System.out.printf("Location: %.6f, %.6f | aircraft radius: %.1f km%n",
+        System.out.printf(Locale.ROOT,
+                "Location: %.6f, %.6f | aircraft radius: %.1f km | airport radius: %.1f km%n",
                 config.location().latitude(),
                 config.location().longitude(),
-                config.aircraftRadiusKm());
+                config.aircraftRadiusKm(),
+                config.airportRadiusKm());
 
         WeatherConditions weather = weatherProvider.currentConditions(config.location());
-        System.out.printf(
+        System.out.printf(Locale.ROOT,
                 "Weather: %s C (feels like %s C), humidity %s%%, precipitation %s mm%n",
                 value(weather.temperatureCelsius(), "%.1f"),
                 value(weather.apparentTemperatureCelsius(), "%.1f"),
                 value(weather.relativeHumidityPercent(), "%d"),
                 value(weather.precipitationMillimeters(), "%.1f"));
-        System.out.printf(
+        System.out.printf(Locale.ROOT,
                 "         clouds %s%%, pressure %s hPa, wind %s km/h at %s degrees, WMO code %s%n",
                 value(weather.cloudCoverPercent(), "%d"),
                 value(weather.pressureHectopascals(), "%.0f"),
@@ -104,18 +112,43 @@ public final class ScreenDuoApplication {
 
         List<NearbyAircraft> aircraft =
                 aircraftProvider.findNearby(config.location(), config.aircraftRadiusKm());
-        System.out.printf("Aircraft found inside radius: %d%n", aircraft.size());
-        aircraft.stream().limit(20).forEach(ScreenDuoApplication::printAircraft);
-        if (aircraft.size() > 20) {
-            System.out.printf("... and %d more.%n", aircraft.size() - 20);
+        List<NearbyAircraft> airborne =
+                aircraft.stream().filter(item -> !item.onGround()).toList();
+        List<NearbyAircraft> onGround =
+                aircraft.stream().filter(NearbyAircraft::onGround).toList();
+
+        printAircraftGroup("Airborne aircraft", airborne, 20);
+        printAircraftGroup("Aircraft on ground", onGround, 10);
+
+        List<NearbyAirport> airports =
+                airportProvider.findNearby(config.location(), config.airportRadiusKm());
+        System.out.printf(Locale.ROOT, "Airports found inside radius: %d%n", airports.size());
+        airports.stream().limit(15).forEach(ScreenDuoApplication::printAirport);
+        if (airports.size() > 15) {
+            System.out.printf(Locale.ROOT, "... and %d more.%n", airports.size() - 15);
+        }
+    }
+
+    private static void printAircraftGroup(
+            String title,
+            List<NearbyAircraft> aircraft,
+            int limit) {
+        System.out.printf(Locale.ROOT, "%s: %d%n", title, aircraft.size());
+        aircraft.stream().limit(limit).forEach(ScreenDuoApplication::printAircraft);
+        if (aircraft.size() > limit) {
+            System.out.printf(Locale.ROOT, "... and %d more.%n", aircraft.size() - limit);
         }
     }
 
     private static void printAircraft(NearbyAircraft aircraft) {
         String name = aircraft.callsign().isBlank() ? aircraft.icao24() : aircraft.callsign();
-        System.out.printf(
-                "  %-9s | %6.1f km | bearing %03.0f | altitude %s m | speed %s km/h | %s%n",
+        String airline = aircraft.airlineName().isBlank()
+                ? "unknown operator" : aircraft.airlineName();
+        System.out.printf(Locale.ROOT,
+                "  %-9s | %-28s | %6.1f km | bearing %03.0f"
+                        + " | altitude %s m | speed %s km/h | %s%n",
                 name,
+                airline,
                 aircraft.distanceKm(),
                 aircraft.bearingDegrees(),
                 value(aircraft.altitudeMeters(), "%.0f"),
@@ -123,8 +156,22 @@ public final class ScreenDuoApplication {
                 aircraft.onGround() ? "on ground" : aircraft.originCountry());
     }
 
+    private static void printAirport(NearbyAirport airport) {
+        String code = airport.iataCode().isBlank() ? airport.ident() : airport.iataCode();
+        String municipality = airport.municipality().isBlank()
+                ? airport.countryCode() : airport.municipality();
+        System.out.printf(Locale.ROOT,
+                "  %-5s | %-35s | %-20s | %6.1f km | bearing %03.0f | %s%n",
+                code,
+                airport.name(),
+                municipality,
+                airport.distanceKm(),
+                airport.bearingDegrees(),
+                airport.type());
+    }
+
     private static String value(Number number, String format) {
-        return number == null ? "n/a" : String.format(java.util.Locale.ROOT, format, number);
+        return number == null ? "n/a" : String.format(Locale.ROOT, format, number);
     }
 
     private static boolean hasArgument(String[] args, String expected) {
@@ -144,6 +191,7 @@ public final class ScreenDuoApplication {
         while (Instant.now().isBefore(deadline)) {
             Optional<DisplayButtonEvent> event = controls.pollButton();
             event.ifPresent(button -> System.out.printf(
+                    Locale.ROOT,
                     "Button: %-8s | ScreenDUO code: %d%n",
                     button.button(),
                     button.sourceCode()));

@@ -5,6 +5,7 @@ import io.github.mmilk23.screenduo.location.GeoPoint;
 public record NearbyAircraft(
         String icao24,
         String callsign,
+        String airlineName,
         String originCountry,
         GeoPoint position,
         double distanceKm,
