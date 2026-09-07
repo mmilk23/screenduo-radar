@@ -1,6 +1,42 @@
 # ScreenDUO Radar
 
-A small Java 24 application that turns the ASUS ScreenDUO into an aircraft, weather and nearby-airport dashboard.
+ScreenDUO Radar is a Java 24 application that gives the classic ASUS ScreenDUO a new job as an interactive aircraft, weather and nearby-airport dashboard.
+
+The application currently runs on Windows 11 through libusb/usb4java and communicates directly with the ScreenDUO USB device (`1043:3100`). Its display and data-source boundaries are deliberately hardware-independent, so another target such as a digital photo frame can be added later without rewriting the screens or application rules.
+
+## Current status
+
+The following features have been tested on the physical ScreenDUO:
+
+- USB device detection and descriptor reporting;
+- native 320x240 RGB image transfer;
+- classic television test pattern;
+- button input for `UP`, `DOWN`, `CONFIRM` and `BACK`;
+- current-weather dashboard with an automatically fitted city title;
+- nearby-airport list with selection, pagination and button debouncing;
+- airport selection: `CONFIRM` opens that airport's weather and `BACK` returns to the list;
+- recovery and synchronization between a button transaction and the following redraw.
+
+The API smoke test also queries nearby aircraft and resolves an airline name when the flight callsign contains a known ICAO operator prefix. A dedicated aircraft screen and airport arrivals/departures are planned.
+
+## Requirements
+
+- Windows 11 for the currently tested hardware setup;
+- [GraalVM JDK 24](https://www.graalvm.org/downloads/) or another JDK 24+;
+- Maven 3.9+;
+- the ScreenDUO connected through a libusb-compatible Windows driver.
+
+The project includes an experimental GraalVM Native Image Maven profile. JVM execution is the currently validated path.
+
+Verify the toolchain:
+
+```powershell
+java -version
+mvn -version
+mvn test
+```
+
+Both commands must report JDK 24 or newer.
 
 ## Configuration
 
@@ -10,7 +46,7 @@ Copy the example file in the project root:
 Copy-Item config.ini.example config.ini
 ```
 
-Edit `config.ini` with your location:
+Edit `config.ini` with the reference location:
 
 ```ini
 [location]
@@ -23,19 +59,17 @@ airport_radius_km = 100
 
 Both radii are optional and default to 50 km for aircraft and 100 km for airports. The real `config.ini` is ignored by Git because future sections may contain API credentials.
 
-## Weather screen
+## Running
 
-Query Open-Meteo and send the current weather dashboard to the connected display:
+### Weather screen
 
 ```powershell
 mvn exec:java "-Dexec.args=--weather-screen"
 ```
 
-The city name is used as the dashboard title and automatically scaled to the available width. The renderer creates a native RGB frame without Swing or JavaFX. Its 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
+The renderer creates an RGB frame without Swing or JavaFX. The 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
 
-## Nearby-airport browser
-
-Load nearby airports and keep the application running for button navigation:
+### Nearby-airport browser
 
 ```powershell
 mvn exec:java "-Dexec.args=--airport-screen"
@@ -47,9 +81,9 @@ Controls:
 - `CONFIRM`: query and display current weather at the selected airport;
 - `BACK`: return from weather to the list, or exit while already on the list.
 
-The list shows five airports per page. Button input is debounced to avoid multiple moves from a single physical press. Scheduled arrivals and departures will be added later behind a separate flight-schedule provider.
+The list shows five airports per page and preserves the selected position when returning from weather.
 
-## API smoke test
+### API smoke test
 
 ```powershell
 mvn exec:java "-Dexec.args=--api-test"
@@ -63,9 +97,24 @@ The command displays:
 - nearby large and medium airports from OurAirports;
 - nearby small airports as a fallback when no large or medium airport exists.
 
-Reference datasets are downloaded on demand to `data/cache/`. Airport data is refreshed after seven days and airline data after 30 days. A stale cache remains usable if a refresh temporarily fails.
+Reference datasets are downloaded on demand to `data/cache/`. Airport data is refreshed after seven days and airline data after 30 days. A stale cache remains usable if a refresh temporarily fails. OpenSky anonymous access may apply rate limits.
 
-OpenSky anonymous access may apply rate limits.
+### Hardware diagnostics
+
+```powershell
+mvn exec:java
+mvn exec:java "-Dexec.args=--test-pattern"
+mvn exec:java "-Dexec.args=--button-test"
+```
+
+The first command only detects the device and prints its descriptors. Use the test pattern before debugging application screens, and use the 30-second button test to inspect physical input.
+
+## Architecture and protocol
+
+- [Architecture](docs/ARCHITECTURE.md): components, extension points, state flow and roadmap.
+- [ScreenDUO USB protocol](docs/SCREENDUO-PROTOCOL.md): descriptors, frame format, transfers, buttons and synchronization rules.
+
+The most important hardware rule is that button responses must be fully drained before clearing the IN endpoint and starting an image transfer. Changing that order can leave the device stalled with `USB error 9: Pipe error`.
 
 ## Data sources and attribution
 
@@ -76,10 +125,24 @@ OpenSky anonymous access may apply rate limits.
 
 Airline resolution is based on the first three letters of a flight callsign. Private registrations and unknown or outdated designators are shown as `unknown operator`. The country supplied by OpenSky is the aircraft registration country, not the flight origin.
 
-## Hardware diagnostics
+## Development workflow
+
+Development work is integrated into `development` through short-lived feature branches. `main` represents the stable line.
+
+Before committing:
 
 ```powershell
-mvn exec:java
-mvn exec:java "-Dexec.args=--test-pattern"
-mvn exec:java "-Dexec.args=--button-test"
+mvn test
 ```
+
+Hardware-facing changes must additionally be tested on the physical ScreenDUO. Automated tests cannot reproduce USB timing, endpoint stalls or Windows driver behavior.
+
+## Native Image experiment
+
+With GraalVM selected:
+
+```powershell
+mvn -Pnative package
+```
+
+Native compilation is a future optimization goal. usb4java/JNI and any reflection used by dependencies may require additional Native Image metadata before this command produces a fully functional executable.
