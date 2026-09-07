@@ -23,6 +23,7 @@ public final class ScreenDuoApplication {
                         "ScreenDUO detected and opened successfully (%04x:%04x).%n",
                         Short.toUnsignedInt(ScreenDuoDevice.VENDOR_ID),
                         Short.toUnsignedInt(ScreenDuoDevice.PRODUCT_ID));
+                System.out.print(device.descriptorReport());
             }
         } catch (LibUsbException exception) {
             System.err.println("Unable to access the ScreenDUO: " + exception.getMessage());
