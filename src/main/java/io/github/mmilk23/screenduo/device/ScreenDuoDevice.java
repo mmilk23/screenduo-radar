@@ -7,6 +7,8 @@ import io.github.mmilk23.screenduo.display.DisplayGeometry;
 import io.github.mmilk23.screenduo.display.RgbFrame;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.usb4java.BufferUtils;
 import org.usb4java.Context;
@@ -32,6 +34,9 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
     private static final long STATUS_TIMEOUT_MILLIS = 2_000;
     private static final long BUTTON_TIMEOUT_MILLIS = 500;
     private static final long BUTTON_DRAIN_TIMEOUT_MILLIS = 100;
+    private static final long IMAGE_SYNC_TIMEOUT_MILLIS = 25;
+    private static final int MAX_BUTTON_DRAIN_READS = 8;
+    private static final int MAX_IMAGE_SYNC_READS = 8;
 
     private final Context context;
     private final DeviceHandle handle;
@@ -81,6 +86,7 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
     @Override
     public void show(RgbFrame frame) {
         ensureOpen();
+        synchronizeBeforeImageTransfer();
         byte[] encodedFrame = ScreenDuoProtocol.encodeFrame(frame);
 
         int position = 0;
@@ -132,26 +138,64 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
                 BUTTON_TIMEOUT_MILLIS,
                 "Unable to read ScreenDUO button response");
 
+        Optional<DisplayButtonEvent> event = decodeButtonEvent(response.data());
+        List<byte[]> drainedPackets = new ArrayList<>();
+        UsbReadResult lastRead = response;
+
+        for (int attempt = 0; attempt < MAX_BUTTON_DRAIN_READS; attempt++) {
+            UsbReadResult drained = readUsb(
+                    ScreenDuoProtocol.FOOTER_SIZE,
+                    BUTTON_DRAIN_TIMEOUT_MILLIS,
+                    "Unable to drain ScreenDUO button response");
+            lastRead = drained;
+            if (drained.data().length == 0) {
+                break;
+            }
+            drainedPackets.add(drained.data());
+            if (event.isEmpty()) {
+                event = decodeButtonEvent(drained.data());
+            }
+        }
+
         int clearHaltStatus = LibUsb.clearHalt(handle, READ_ENDPOINT);
         ensureSuccess(clearHaltStatus, "Unable to clear ScreenDUO button endpoint");
 
-        UsbReadResult drain = readUsb(
+        UsbReadResult finalRead = readUsb(
                 ScreenDuoProtocol.FOOTER_SIZE,
                 BUTTON_DRAIN_TIMEOUT_MILLIS,
-                "Unable to drain ScreenDUO button status");
-
-        Optional<DisplayButtonEvent> event = decodeButtonEvent(response.data());
-        if (event.isEmpty()) {
-            event = decodeButtonEvent(drain.data());
+                "Unable to finish ScreenDUO button transaction");
+        lastRead = finalRead;
+        if (finalRead.data().length > 0) {
+            drainedPackets.add(finalRead.data());
+            if (event.isEmpty()) {
+                event = decodeButtonEvent(finalRead.data());
+            }
         }
 
         return new ScreenDuoButtonProbe(
                 response.status(),
                 response.data(),
                 clearHaltStatus,
-                drain.status(),
-                drain.data(),
+                lastRead.status(),
+                concatenate(drainedPackets),
                 event);
+    }
+
+    private void synchronizeBeforeImageTransfer() {
+        for (int attempt = 0; attempt < MAX_IMAGE_SYNC_READS; attempt++) {
+            UsbReadResult stale = readUsb(
+                    ScreenDuoProtocol.FOOTER_SIZE,
+                    IMAGE_SYNC_TIMEOUT_MILLIS,
+                    "Unable to synchronize ScreenDUO read endpoint");
+            if (stale.data().length == 0) {
+                break;
+            }
+        }
+
+        int result = LibUsb.clearHalt(handle, READ_ENDPOINT);
+        ensureSuccess(result, "Unable to synchronize ScreenDUO read endpoint");
+        result = LibUsb.clearHalt(handle, WRITE_ENDPOINT);
+        ensureSuccess(result, "Unable to synchronize ScreenDUO write endpoint");
     }
 
     private Optional<DisplayButtonEvent> decodeButtonEvent(byte[] data) {
@@ -159,6 +203,17 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
                 .stream()
                 .mapToObj(ScreenDuoButtonMapper::map)
                 .findFirst();
+    }
+
+    private static byte[] concatenate(List<byte[]> packets) {
+        int length = packets.stream().mapToInt(packet -> packet.length).sum();
+        byte[] result = new byte[length];
+        int offset = 0;
+        for (byte[] packet : packets) {
+            System.arraycopy(packet, 0, result, offset, packet.length);
+            offset += packet.length;
+        }
+        return result;
     }
 
     @Override
@@ -217,17 +272,26 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
     }
 
     private void readStatus() {
-        ByteBuffer status = BufferUtils.allocateByteBuffer(ScreenDuoProtocol.STATUS_SIZE);
-        IntBuffer transferred = BufferUtils.allocateIntBuffer();
-        int result = LibUsb.bulkTransfer(
-                handle, READ_ENDPOINT, status, transferred, STATUS_TIMEOUT_MILLIS);
-        ensureSuccess(result, "Unable to read ScreenDUO block status");
+        UsbReadResult status = readUsb(
+                ScreenDuoProtocol.STATUS_SIZE,
+                STATUS_TIMEOUT_MILLIS,
+                "Unable to read ScreenDUO block status");
 
-        int transferredBytes = transferred.get(0);
-        if (transferredBytes != ScreenDuoProtocol.STATUS_SIZE) {
-            throw new IllegalStateException(
-                    "Invalid ScreenDUO status length: " + transferredBytes);
+        if (status.status() == LibUsb.ERROR_PIPE && status.data().length == 0) {
+            int clearHaltStatus = LibUsb.clearHalt(handle, READ_ENDPOINT);
+            ensureSuccess(clearHaltStatus, "Unable to recover ScreenDUO block status endpoint");
+            status = readUsb(
+                    ScreenDuoProtocol.STATUS_SIZE,
+                    STATUS_TIMEOUT_MILLIS,
+                    "Unable to read ScreenDUO block status after recovery");
         }
+
+        if (status.data().length == ScreenDuoProtocol.STATUS_SIZE) {
+            return;
+        }
+        ensureSuccess(status.status(), "Unable to read ScreenDUO block status");
+        throw new IllegalStateException(
+                "Invalid ScreenDUO status length: " + status.data().length);
     }
 
     private void ensureOpen() {
