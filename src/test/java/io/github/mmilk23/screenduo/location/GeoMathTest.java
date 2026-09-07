@@ -9,11 +9,11 @@ class GeoMathTest {
 
     @Test
     void calculatesDistanceAndBearing() {
-        GeoPoint rioDeJaneiro = new GeoPoint(-22.9068, -43.1729);
-        GeoPoint saoPaulo = new GeoPoint(-23.5505, -46.6333);
+        GeoPoint origin = new GeoPoint(0.0, 0.0);
+        GeoPoint oneDegreeEastOnEquator = new GeoPoint(0.0, 1.0);
 
-        assertEquals(357.7, GeoMath.distanceKm(rioDeJaneiro, saoPaulo), 2.0);
-        assertEquals(266.3, GeoMath.bearingDegrees(rioDeJaneiro, saoPaulo), 2.0);
+        assertEquals(111.195, GeoMath.distanceKm(origin, oneDegreeEastOnEquator), 0.001);
+        assertEquals(90.0, GeoMath.bearingDegrees(origin, oneDegreeEastOnEquator), 0.001);
     }
 
     @Test
