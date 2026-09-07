@@ -1,0 +1,29 @@
+# Maven
+target/
+dependency-reduced-pom.xml
+
+# Java
+*.class
+*.jar
+*.log
+hs_err_pid*
+
+# GraalVM
+*.exe
+*.build_artifacts.txt
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# Generated modernization files
+.github/modernize/
+
+# Local configuration and secrets
+.env
+config.yaml
+
+# Operating systems
+.DS_Store
+Thumbs.db
