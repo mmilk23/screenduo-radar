@@ -36,16 +36,16 @@ public final class ScreenDuoApplication {
                         Short.toUnsignedInt(ScreenDuoDevice.PRODUCT_ID));
                 System.out.print(device.descriptorReport());
 
-                boolean actionExecuted = false;
-                if (hasArgument(args, TEST_PATTERN_ARGUMENT)) {
+                boolean testPatternRequested = hasArgument(args, TEST_PATTERN_ARGUMENT);
+                boolean buttonTestRequested = hasArgument(args, BUTTON_TEST_ARGUMENT);
+
+                if (testPatternRequested || buttonTestRequested) {
                     showTestPattern(device);
-                    actionExecuted = true;
                 }
-                if (hasArgument(args, BUTTON_TEST_ARGUMENT)) {
+                if (buttonTestRequested) {
                     testButtons(device);
-                    actionExecuted = true;
                 }
-                if (!actionExecuted) {
+                if (!testPatternRequested && !buttonTestRequested) {
                     System.out.println(
                             "Diagnostic mode only. Use --test-pattern or --button-test.");
                 }
