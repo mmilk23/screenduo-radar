@@ -1,6 +1,12 @@
 package io.github.mmilk23.screenduo.device;
 
+import io.github.mmilk23.screenduo.display.Display;
+import io.github.mmilk23.screenduo.display.DisplayGeometry;
+import io.github.mmilk23.screenduo.display.RgbFrame;
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 import java.util.Optional;
+import org.usb4java.BufferUtils;
 import org.usb4java.Context;
 import org.usb4java.Device;
 import org.usb4java.DeviceDescriptor;
@@ -9,10 +15,19 @@ import org.usb4java.DeviceList;
 import org.usb4java.LibUsb;
 import org.usb4java.LibUsbException;
 
-public final class ScreenDuoDevice implements AutoCloseable {
+public final class ScreenDuoDevice implements Display {
 
     public static final short VENDOR_ID = (short) 0x1043;
     public static final short PRODUCT_ID = (short) 0x3100;
+
+    private static final int INTERFACE_NUMBER = 0;
+    private static final int ALTERNATE_SETTING = 0;
+    private static final byte WRITE_ENDPOINT = (byte) 0x02;
+    private static final byte READ_ENDPOINT = (byte) 0x81;
+
+    private static final long COMMAND_TIMEOUT_MILLIS = 1_000;
+    private static final long DATA_TIMEOUT_MILLIS = 5_000;
+    private static final long STATUS_TIMEOUT_MILLIS = 2_000;
 
     private final Context context;
     private final DeviceHandle handle;
@@ -55,14 +70,97 @@ public final class ScreenDuoDevice implements AutoCloseable {
     }
 
     @Override
+    public DisplayGeometry geometry() {
+        return ScreenDuoProtocol.GEOMETRY;
+    }
+
+    @Override
+    public void show(RgbFrame frame) {
+        ensureOpen();
+        byte[] encodedFrame = ScreenDuoProtocol.encodeFrame(frame);
+
+        int position = 0;
+        int blockIndex = 0;
+        while (position < encodedFrame.length) {
+            int blockLength = Math.min(
+                    ScreenDuoProtocol.MAX_BLOCK_SIZE, encodedFrame.length - position);
+
+            writeExact(
+                    ScreenDuoProtocol.imageBlockCommand(
+                            blockLength, encodedFrame.length, blockIndex),
+                    COMMAND_TIMEOUT_MILLIS,
+                    "Unable to write ScreenDUO block command");
+
+            writeExact(
+                    encodedFrame,
+                    position,
+                    blockLength,
+                    DATA_TIMEOUT_MILLIS,
+                    "Unable to write ScreenDUO image block");
+
+            readStatus();
+
+            writeExact(
+                    ScreenDuoProtocol.imageBlockFooter(
+                            blockLength, encodedFrame.length, blockIndex),
+                    COMMAND_TIMEOUT_MILLIS,
+                    "Unable to write ScreenDUO block footer");
+
+            position += blockLength;
+            blockIndex++;
+        }
+    }
+
+    @Override
     public void close() {
         if (closed) {
             return;
         }
 
+        LibUsb.releaseInterface(handle, INTERFACE_NUMBER);
         LibUsb.close(handle);
         LibUsb.exit(context);
         closed = true;
+    }
+
+    private void writeExact(byte[] data, long timeout, String message) {
+        writeExact(data, 0, data.length, timeout, message);
+    }
+
+    private void writeExact(byte[] data, int offset, int length, long timeout, String message) {
+        ByteBuffer buffer = BufferUtils.allocateByteBuffer(length);
+        buffer.put(data, offset, length);
+        buffer.rewind();
+
+        IntBuffer transferred = BufferUtils.allocateIntBuffer();
+        int result = LibUsb.bulkTransfer(handle, WRITE_ENDPOINT, buffer, transferred, timeout);
+        ensureSuccess(result, message);
+
+        int transferredBytes = transferred.get(0);
+        if (transferredBytes != length) {
+            throw new IllegalStateException(
+                    message + ": expected " + length + " bytes, wrote " + transferredBytes);
+        }
+    }
+
+    private void readStatus() {
+        ByteBuffer status = BufferUtils.allocateByteBuffer(ScreenDuoProtocol.STATUS_SIZE);
+        IntBuffer transferred = BufferUtils.allocateIntBuffer();
+        int result = LibUsb.bulkTransfer(
+                handle, READ_ENDPOINT, status, transferred, STATUS_TIMEOUT_MILLIS);
+        ensureSuccess(result, "Unable to read ScreenDUO block status");
+
+        int transferredBytes = transferred.get(0);
+        if (transferredBytes != ScreenDuoProtocol.STATUS_SIZE) {
+            throw new IllegalStateException(
+                    "Invalid ScreenDUO status length: " + transferredBytes);
+        }
+    }
+
+    private void ensureOpen() {
+        if (closed) {
+            throw new IllegalStateException("ScreenDUO is already closed");
+        }
     }
 
     private static Optional<OpenedDevice> findAndOpen(Context context) {
@@ -79,17 +177,45 @@ public final class ScreenDuoDevice implements AutoCloseable {
                 ensureSuccess(result, "Unable to read a USB device descriptor");
 
                 if (matches(descriptor.idVendor(), descriptor.idProduct())) {
-                    String descriptorReport = UsbDescriptorReport.create(device, descriptor);
-                    DeviceHandle handle = new DeviceHandle();
-                    result = LibUsb.open(device, handle);
-                    ensureSuccess(result, "ScreenDUO found but could not be opened");
-                    return Optional.of(new OpenedDevice(handle, descriptorReport));
+                    return Optional.of(openDevice(device, descriptor));
                 }
             }
 
             return Optional.empty();
         } finally {
             LibUsb.freeDeviceList(devices, true);
+        }
+    }
+
+    private static OpenedDevice openDevice(Device device, DeviceDescriptor descriptor) {
+        String descriptorReport = UsbDescriptorReport.create(device, descriptor);
+        DeviceHandle handle = new DeviceHandle();
+        int result = LibUsb.open(device, handle);
+        ensureSuccess(result, "ScreenDUO found but could not be opened");
+
+        boolean claimed = false;
+        try {
+            result = LibUsb.claimInterface(handle, INTERFACE_NUMBER);
+            ensureSuccess(result, "ScreenDUO found but interface 0 could not be claimed");
+            claimed = true;
+
+            result = LibUsb.setInterfaceAltSetting(
+                    handle, INTERFACE_NUMBER, ALTERNATE_SETTING);
+            ensureSuccess(result, "Unable to select ScreenDUO interface alternate setting");
+
+            result = LibUsb.clearHalt(handle, WRITE_ENDPOINT);
+            ensureSuccess(result, "Unable to clear ScreenDUO write endpoint");
+
+            result = LibUsb.clearHalt(handle, READ_ENDPOINT);
+            ensureSuccess(result, "Unable to clear ScreenDUO read endpoint");
+
+            return new OpenedDevice(handle, descriptorReport);
+        } catch (RuntimeException exception) {
+            if (claimed) {
+                LibUsb.releaseInterface(handle, INTERFACE_NUMBER);
+            }
+            LibUsb.close(handle);
+            throw exception;
         }
     }
 
