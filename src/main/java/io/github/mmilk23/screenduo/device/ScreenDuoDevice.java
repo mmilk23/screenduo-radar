@@ -117,23 +117,42 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
 
     @Override
     public Optional<DisplayButtonEvent> pollButton() {
+        return probeButton().event();
+    }
+
+    public ScreenDuoButtonProbe probeButton() {
         ensureOpen();
         writeExact(
                 ScreenDuoProtocol.buttonPollCommand(),
                 COMMAND_TIMEOUT_MILLIS,
                 "Unable to request ScreenDUO button state");
 
-        byte[] response = readOptional(
-                ScreenDuoProtocol.BUTTON_RESPONSE_SIZE, BUTTON_TIMEOUT_MILLIS);
+        UsbReadResult response = readUsb(
+                ScreenDuoProtocol.BUTTON_RESPONSE_SIZE,
+                BUTTON_TIMEOUT_MILLIS,
+                "Unable to read ScreenDUO button response");
 
-        int result = LibUsb.clearHalt(handle, READ_ENDPOINT);
-        ensureSuccess(result, "Unable to clear ScreenDUO button endpoint");
-        readOptional(ScreenDuoProtocol.FOOTER_SIZE, BUTTON_DRAIN_TIMEOUT_MILLIS);
+        int clearHaltStatus = LibUsb.clearHalt(handle, READ_ENDPOINT);
+        ensureSuccess(clearHaltStatus, "Unable to clear ScreenDUO button endpoint");
 
-        return ScreenDuoProtocol.decodeLastButtonCode(response)
+        UsbReadResult drain = readUsb(
+                ScreenDuoProtocol.FOOTER_SIZE,
+                BUTTON_DRAIN_TIMEOUT_MILLIS,
+                "Unable to drain ScreenDUO button status");
+
+        Optional<DisplayButtonEvent> event = ScreenDuoProtocol
+                .decodeLastButtonCode(response.data())
                 .stream()
                 .mapToObj(ScreenDuoButtonMapper::map)
                 .findFirst();
+
+        return new ScreenDuoButtonProbe(
+                response.status(),
+                response.data(),
+                clearHaltStatus,
+                drain.status(),
+                drain.data(),
+                event);
     }
 
     @Override
@@ -168,11 +187,10 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
         }
     }
 
-    private byte[] readOptional(int capacity, long timeout) {
+    private UsbReadResult readUsb(int capacity, long timeout, String message) {
         ByteBuffer buffer = BufferUtils.allocateByteBuffer(capacity);
         IntBuffer transferred = BufferUtils.allocateIntBuffer();
         int result = LibUsb.bulkTransfer(handle, READ_ENDPOINT, buffer, transferred, timeout);
-
         int transferredBytes = transferred.get(0);
 
         // libusb may report a timeout after already receiving a partial response.
@@ -181,14 +199,15 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
             byte[] response = new byte[transferredBytes];
             buffer.rewind();
             buffer.get(response);
-            return response;
+            return new UsbReadResult(result, response);
         }
 
-        if (result == LibUsb.ERROR_TIMEOUT || result == LibUsb.ERROR_PIPE) {
-            return new byte[0];
+        if (result != LibUsb.SUCCESS
+                && result != LibUsb.ERROR_TIMEOUT
+                && result != LibUsb.ERROR_PIPE) {
+            ensureSuccess(result, message);
         }
-        ensureSuccess(result, "Unable to read ScreenDUO button data");
-        return new byte[0];
+        return new UsbReadResult(result, new byte[0]);
     }
 
     private void readStatus() {
@@ -271,6 +290,9 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
         if (result != LibUsb.SUCCESS) {
             throw new LibUsbException(message, result);
         }
+    }
+
+    private record UsbReadResult(int status, byte[] data) {
     }
 
     private record OpenedDevice(DeviceHandle handle, String descriptorReport) {
