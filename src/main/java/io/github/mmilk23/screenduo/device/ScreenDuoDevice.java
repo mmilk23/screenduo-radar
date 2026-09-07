@@ -140,11 +140,10 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
                 BUTTON_DRAIN_TIMEOUT_MILLIS,
                 "Unable to drain ScreenDUO button status");
 
-        Optional<DisplayButtonEvent> event = ScreenDuoProtocol
-                .decodeLastButtonCode(response.data())
-                .stream()
-                .mapToObj(ScreenDuoButtonMapper::map)
-                .findFirst();
+        Optional<DisplayButtonEvent> event = decodeButtonEvent(response.data());
+        if (event.isEmpty()) {
+            event = decodeButtonEvent(drain.data());
+        }
 
         return new ScreenDuoButtonProbe(
                 response.status(),
@@ -153,6 +152,13 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
                 drain.status(),
                 drain.data(),
                 event);
+    }
+
+    private Optional<DisplayButtonEvent> decodeButtonEvent(byte[] data) {
+        return ScreenDuoProtocol.decodeLastButtonCode(data)
+                .stream()
+                .mapToObj(ScreenDuoButtonMapper::map)
+                .findFirst();
     }
 
     @Override

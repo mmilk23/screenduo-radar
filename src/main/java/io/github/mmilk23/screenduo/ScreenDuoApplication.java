@@ -1,10 +1,10 @@
 package io.github.mmilk23.screenduo;
 
-import io.github.mmilk23.screenduo.device.ScreenDuoButtonProbe;
 import io.github.mmilk23.screenduo.device.ScreenDuoDevice;
 import io.github.mmilk23.screenduo.display.ClassicTvTestPattern;
 import io.github.mmilk23.screenduo.display.Display;
 import io.github.mmilk23.screenduo.display.DisplayButtonEvent;
+import io.github.mmilk23.screenduo.display.DisplayControls;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -68,21 +68,13 @@ public final class ScreenDuoApplication {
         System.out.println("Classic TV test pattern sent successfully.");
     }
 
-    private static void testButtons(ScreenDuoDevice device) throws InterruptedException {
+    private static void testButtons(DisplayControls controls) throws InterruptedException {
         Instant deadline = Instant.now().plus(BUTTON_TEST_DURATION);
-        String previousFingerprint = null;
         System.out.println(
                 "Button test active for 30 seconds. Press the ScreenDUO buttons (Ctrl+C to stop).");
 
         while (Instant.now().isBefore(deadline)) {
-            ScreenDuoButtonProbe probe = device.probeButton();
-            String fingerprint = probe.fingerprint();
-            if (!fingerprint.equals(previousFingerprint)) {
-                System.out.println("USB button probe: " + probe.describe());
-                previousFingerprint = fingerprint;
-            }
-
-            Optional<DisplayButtonEvent> event = probe.event();
+            Optional<DisplayButtonEvent> event = controls.pollButton();
             event.ifPresent(button -> System.out.printf(
                     "Button: %-8s | ScreenDUO code: %d%n",
                     button.button(),
