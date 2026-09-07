@@ -14,12 +14,16 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 public final class OurAirportsAirportProvider implements AirportProvider {
 
     private static final URI DATA_URI = URI.create(
             "https://davidmegginson.github.io/ourairports-data/airports.csv");
     private static final double FEET_TO_METERS = 0.3048;
+    private static final Set<String> PRIMARY_TYPES =
+            Set.of("large_airport", "medium_airport");
+    private static final String FALLBACK_TYPE = "small_airport";
 
     private final TextDataSource dataSource;
 
@@ -37,18 +41,28 @@ public final class OurAirportsAirportProvider implements AirportProvider {
     @Override
     public List<NearbyAirport> findNearby(GeoPoint center, double radiusKm)
             throws IOException, InterruptedException {
-        List<NearbyAirport> airports = new ArrayList<>();
-        CsvReader.read(dataSource.get(), row -> addIfNearby(row, center, radiusKm, airports));
-        airports.sort(Comparator.comparingDouble(NearbyAirport::distanceKm));
-        return List.copyOf(airports);
+        List<NearbyAirport> primary = new ArrayList<>();
+        List<NearbyAirport> fallback = new ArrayList<>();
+        CsvReader.read(dataSource.get(), row ->
+                addIfNearby(row, center, radiusKm, primary, fallback));
+
+        List<NearbyAirport> selected = primary.isEmpty() ? fallback : primary;
+        selected.sort(Comparator.comparingDouble(NearbyAirport::distanceKm));
+        return List.copyOf(selected);
     }
 
     private static void addIfNearby(
             List<String> row,
             GeoPoint center,
             double radiusKm,
-            List<NearbyAirport> airports) {
-        if (row.size() < 16 || "id".equals(row.get(0)) || "closed".equals(row.get(2))) {
+            List<NearbyAirport> primary,
+            List<NearbyAirport> fallback) {
+        if (row.size() < 16 || "id".equals(row.get(0))) {
+            return;
+        }
+
+        String type = row.get(2);
+        if (!PRIMARY_TYPES.contains(type) && !FALLBACK_TYPE.equals(type)) {
             return;
         }
 
@@ -71,17 +85,23 @@ public final class OurAirportsAirportProvider implements AirportProvider {
         }
 
         Double elevationFeet = decimal(row.get(6));
-        airports.add(new NearbyAirport(
+        NearbyAirport airport = new NearbyAirport(
                 row.get(1),
                 row.get(13),
                 row.get(3),
                 row.get(10),
                 row.get(8),
-                row.get(2),
+                type,
                 position,
                 distance,
                 GeoMath.bearingDegrees(center, position),
-                elevationFeet == null ? null : elevationFeet * FEET_TO_METERS));
+                elevationFeet == null ? null : elevationFeet * FEET_TO_METERS);
+
+        if (PRIMARY_TYPES.contains(type)) {
+            primary.add(airport);
+        } else {
+            fallback.add(airport);
+        }
     }
 
     private static Double decimal(String value) {

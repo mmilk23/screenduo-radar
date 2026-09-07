@@ -14,6 +14,7 @@ import io.github.mmilk23.screenduo.display.DisplayButtonEvent;
 import io.github.mmilk23.screenduo.display.DisplayControls;
 import io.github.mmilk23.screenduo.weather.WeatherConditions;
 import io.github.mmilk23.screenduo.weather.WeatherProvider;
+import io.github.mmilk23.screenduo.weather.display.WeatherScreenRenderer;
 import io.github.mmilk23.screenduo.weather.openmeteo.OpenMeteoWeatherProvider;
 import java.io.IOException;
 import java.time.Duration;
@@ -27,6 +28,7 @@ import org.usb4java.LibUsbException;
 public final class ScreenDuoApplication {
 
     private static final String API_TEST_ARGUMENT = "--api-test";
+    private static final String WEATHER_SCREEN_ARGUMENT = "--weather-screen";
     private static final String TEST_PATTERN_ARGUMENT = "--test-pattern";
     private static final String BUTTON_TEST_ARGUMENT = "--button-test";
     private static final Duration BUTTON_TEST_DURATION = Duration.ofSeconds(30);
@@ -40,6 +42,9 @@ public final class ScreenDuoApplication {
                 testApis();
                 return;
             }
+
+            boolean weatherScreenRequested = hasArgument(args, WEATHER_SCREEN_ARGUMENT);
+            WeatherConditions weather = weatherScreenRequested ? loadWeather() : null;
 
             Optional<ScreenDuoDevice> detectedDevice = ScreenDuoDevice.open();
             if (detectedDevice.isEmpty()) {
@@ -58,15 +63,18 @@ public final class ScreenDuoApplication {
                 boolean testPatternRequested = hasArgument(args, TEST_PATTERN_ARGUMENT);
                 boolean buttonTestRequested = hasArgument(args, BUTTON_TEST_ARGUMENT);
 
-                if (testPatternRequested || buttonTestRequested) {
+                if (testPatternRequested || (buttonTestRequested && !weatherScreenRequested)) {
                     showTestPattern(device);
+                }
+                if (weatherScreenRequested) {
+                    showWeather(device, weather);
                 }
                 if (buttonTestRequested) {
                     testButtons(device);
                 }
-                if (!testPatternRequested && !buttonTestRequested) {
-                    System.out.println(
-                            "Diagnostic mode only. Use --test-pattern, --button-test or --api-test.");
+                if (!testPatternRequested && !buttonTestRequested && !weatherScreenRequested) {
+                    System.out.println("Diagnostic mode only. Use --test-pattern, --button-test, "
+                            + "--weather-screen or --api-test.");
                 }
             }
         } catch (IOException exception) {
@@ -80,6 +88,12 @@ public final class ScreenDuoApplication {
             Thread.currentThread().interrupt();
             System.err.println("Operation interrupted.");
         }
+    }
+
+    private static WeatherConditions loadWeather() throws IOException, InterruptedException {
+        ApplicationConfig config = ApplicationConfig.fromDefaultFile();
+        WeatherProvider weatherProvider = new OpenMeteoWeatherProvider();
+        return weatherProvider.currentConditions(config.location());
     }
 
     private static void testApis() throws IOException, InterruptedException {
@@ -122,10 +136,11 @@ public final class ScreenDuoApplication {
 
         List<NearbyAirport> airports =
                 airportProvider.findNearby(config.location(), config.airportRadiusKm());
-        System.out.printf(Locale.ROOT, "Airports found inside radius: %d%n", airports.size());
-        airports.stream().limit(15).forEach(ScreenDuoApplication::printAirport);
-        if (airports.size() > 15) {
-            System.out.printf(Locale.ROOT, "... and %d more.%n", airports.size() - 15);
+        System.out.printf(Locale.ROOT,
+                "Relevant airports found inside radius: %d%n", airports.size());
+        airports.stream().limit(5).forEach(ScreenDuoApplication::printAirport);
+        if (airports.size() > 5) {
+            System.out.printf(Locale.ROOT, "... and %d more.%n", airports.size() - 5);
         }
     }
 
@@ -146,14 +161,14 @@ public final class ScreenDuoApplication {
                 ? "unknown operator" : aircraft.airlineName();
         System.out.printf(Locale.ROOT,
                 "  %-9s | %-28s | %6.1f km | bearing %03.0f"
-                        + " | altitude %s m | speed %s km/h | %s%n",
+                        + " | altitude %s m | speed %s km/h | registration: %s%n",
                 name,
-                airline,
+                fit(airline, 28),
                 aircraft.distanceKm(),
                 aircraft.bearingDegrees(),
                 value(aircraft.altitudeMeters(), "%.0f"),
                 value(aircraft.speedKilometersPerHour(), "%.0f"),
-                aircraft.onGround() ? "on ground" : aircraft.originCountry());
+                aircraft.registrationCountry());
     }
 
     private static void printAirport(NearbyAirport airport) {
@@ -163,11 +178,18 @@ public final class ScreenDuoApplication {
         System.out.printf(Locale.ROOT,
                 "  %-5s | %-35s | %-20s | %6.1f km | bearing %03.0f | %s%n",
                 code,
-                airport.name(),
-                municipality,
+                fit(airport.name(), 35),
+                fit(municipality, 20),
                 airport.distanceKm(),
                 airport.bearingDegrees(),
                 airport.type());
+    }
+
+    private static String fit(String value, int maximumLength) {
+        if (value.length() <= maximumLength) {
+            return value;
+        }
+        return value.substring(0, maximumLength - 3) + "...";
     }
 
     private static String value(Number number, String format) {
@@ -181,6 +203,11 @@ public final class ScreenDuoApplication {
     private static void showTestPattern(Display display) {
         display.show(ClassicTvTestPattern.render(display.geometry()));
         System.out.println("Classic TV test pattern sent successfully.");
+    }
+
+    private static void showWeather(Display display, WeatherConditions weather) {
+        display.show(new WeatherScreenRenderer().render(display.geometry(), weather));
+        System.out.println("Current weather screen sent successfully.");
     }
 
     private static void testButtons(DisplayControls controls) throws InterruptedException {

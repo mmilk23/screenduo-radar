@@ -17,11 +17,11 @@ class OurAirportsAirportProviderTest {
     Path temporaryDirectory;
 
     @Test
-    void filtersAndSortsNearbyAirports() throws IOException, InterruptedException {
-        Path data = Files.writeString(temporaryDirectory.resolve("airports.csv"), """
-                id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,gps_code,iata_code,local_code,home_link
+    void keepsRelevantAirportsAndIgnoresHeliports() throws IOException, InterruptedException {
+        Path data = writeData("""
                 1,NEAR,large_airport,Near Airport,0.1,0.0,100,AF,AA,AA-1,Town,yes,NEAR,NAR,,,
-                2,FAR,large_airport,Far Airport,10.0,10.0,200,AF,AA,AA-1,Town,yes,FAR,FAR,,,
+                2,HELI,heliport,Near Heliport,0.05,0.0,100,AF,AA,AA-1,Town,no,HELI,,,,
+                3,FAR,large_airport,Far Airport,10.0,10.0,200,AF,AA,AA-1,Town,yes,FAR,FAR,,,
                 """);
         OurAirportsAirportProvider provider =
                 new OurAirportsAirportProvider(() -> data);
@@ -32,5 +32,30 @@ class OurAirportsAirportProviderTest {
         assertEquals(1, result.size());
         assertEquals("NEAR", result.getFirst().ident());
         assertEquals(11.12, result.getFirst().distanceKm(), 0.02);
+    }
+
+    @Test
+    void usesSmallAirportsWhenNoLargeOrMediumAirportIsNearby()
+            throws IOException, InterruptedException {
+        Path data = writeData("""
+                1,SMALL,small_airport,Small Airport,0.1,0.0,100,AF,AA,AA-1,Town,no,SMAL,,,,
+                2,HELI,heliport,Near Heliport,0.05,0.0,100,AF,AA,AA-1,Town,no,HELI,,,,
+                """);
+        OurAirportsAirportProvider provider =
+                new OurAirportsAirportProvider(() -> data);
+
+        List<NearbyAirport> result =
+                provider.findNearby(new GeoPoint(0.0, 0.0), 50.0);
+
+        assertEquals(1, result.size());
+        assertEquals("SMALL", result.getFirst().ident());
+    }
+
+    private Path writeData(String rows) throws IOException {
+        return Files.writeString(temporaryDirectory.resolve("airports.csv"),
+                "id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,"
+                        + "iso_country,iso_region,municipality,scheduled_service,gps_code,"
+                        + "iata_code,local_code,home_link\n"
+                        + rows);
     }
 }

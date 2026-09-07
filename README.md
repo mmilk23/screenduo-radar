@@ -22,6 +22,16 @@ airport_radius_km = 100
 
 Both radii are optional and default to 50 km for aircraft and 100 km for airports. The real `config.ini` is ignored by Git because future sections may contain API credentials.
 
+## Weather screen
+
+Query Open-Meteo and send the current weather dashboard to the connected display:
+
+```powershell
+mvn exec:java "-Dexec.args=--weather-screen"
+```
+
+The renderer creates a native RGB frame without Swing or JavaFX. Its 320x240 dashboard is automatically fitted and letterboxed for displays with other resolutions or aspect ratios.
+
 ## API smoke test
 
 ```powershell
@@ -33,7 +43,8 @@ The command displays:
 - current weather from Open-Meteo;
 - nearby airborne and on-ground aircraft from OpenSky;
 - airline names resolved from the ICAO callsign prefix;
-- nearby airports from OurAirports.
+- nearby large and medium airports from OurAirports;
+- nearby small airports as a fallback when no large or medium airport exists.
 
 Reference datasets are downloaded on demand to `data/cache/`. Airport data is refreshed after seven days and airline data after 30 days. A stale cache remains usable if a refresh temporarily fails.
 
@@ -46,7 +57,7 @@ OpenSky anonymous access may apply rate limits.
 - [OurAirports](https://ourairports.com/data/) for public-domain airport data.
 - [OpenFlights](https://openflights.org/data.php) airline data, available under the Open Database License.
 
-Airline resolution is based on the first three letters of a flight callsign. Private registrations and unknown or outdated designators are shown as `unknown operator`.
+Airline resolution is based on the first three letters of a flight callsign. Private registrations and unknown or outdated designators are shown as `unknown operator`. The country supplied by OpenSky is the aircraft registration country, not the flight origin.
 
 ## Hardware diagnostics
 

@@ -6,7 +6,7 @@ public record NearbyAircraft(
         String icao24,
         String callsign,
         String airlineName,
-        String originCountry,
+        String registrationCountry,
         GeoPoint position,
         double distanceKm,
         double bearingDegrees,
