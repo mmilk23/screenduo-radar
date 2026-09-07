@@ -173,16 +173,22 @@ public final class ScreenDuoDevice implements Display, DisplayControls {
         IntBuffer transferred = BufferUtils.allocateIntBuffer();
         int result = LibUsb.bulkTransfer(handle, READ_ENDPOINT, buffer, transferred, timeout);
 
+        int transferredBytes = transferred.get(0);
+
+        // libusb may report a timeout after already receiving a partial response.
+        // The original ScreenDUO driver processes those bytes, so preserve them.
+        if (transferredBytes > 0) {
+            byte[] response = new byte[transferredBytes];
+            buffer.rewind();
+            buffer.get(response);
+            return response;
+        }
+
         if (result == LibUsb.ERROR_TIMEOUT || result == LibUsb.ERROR_PIPE) {
             return new byte[0];
         }
         ensureSuccess(result, "Unable to read ScreenDUO button data");
-
-        int transferredBytes = transferred.get(0);
-        byte[] response = new byte[transferredBytes];
-        buffer.rewind();
-        buffer.get(response);
-        return response;
+        return new byte[0];
     }
 
     private void readStatus() {
