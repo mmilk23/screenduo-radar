@@ -28,31 +28,14 @@ public final class ScreenDuoDevice implements AutoCloseable {
         int result = LibUsb.init(context);
         ensureSuccess(result, "Unable to initialize libusb");
 
-        DeviceList devices = new DeviceList();
-        result = LibUsb.getDeviceList(context, devices);
-        if (result < LibUsb.SUCCESS) {
-            LibUsb.exit(context);
-            throw new LibUsbException("Unable to enumerate USB devices", result);
-        }
-
         try {
-            for (Device device : devices) {
-                DeviceDescriptor descriptor = new DeviceDescriptor();
-                result = LibUsb.getDeviceDescriptor(device, descriptor);
-                ensureSuccess(result, "Unable to read a USB device descriptor");
-
-                if (matches(descriptor.idVendor(), descriptor.idProduct())) {
-                    DeviceHandle handle = new DeviceHandle();
-                    result = LibUsb.open(device, handle);
-                    if (result != LibUsb.SUCCESS) {
-                        LibUsb.exit(context);
-                        throw new LibUsbException("ScreenDUO found but could not be opened", result);
-                    }
-                    return Optional.of(new ScreenDuoDevice(context, handle));
-                }
+            Optional<DeviceHandle> detectedHandle = findAndOpen(context);
+            if (detectedHandle.isPresent()) {
+                return Optional.of(new ScreenDuoDevice(context, detectedHandle.orElseThrow()));
             }
-        } finally {
-            LibUsb.freeDeviceList(devices, true);
+        } catch (RuntimeException exception) {
+            LibUsb.exit(context);
+            throw exception;
         }
 
         LibUsb.exit(context);
@@ -72,6 +55,33 @@ public final class ScreenDuoDevice implements AutoCloseable {
         LibUsb.close(handle);
         LibUsb.exit(context);
         closed = true;
+    }
+
+    private static Optional<DeviceHandle> findAndOpen(Context context) {
+        DeviceList devices = new DeviceList();
+        int result = LibUsb.getDeviceList(context, devices);
+        if (result < LibUsb.SUCCESS) {
+            throw new LibUsbException("Unable to enumerate USB devices", result);
+        }
+
+        try {
+            for (Device device : devices) {
+                DeviceDescriptor descriptor = new DeviceDescriptor();
+                result = LibUsb.getDeviceDescriptor(device, descriptor);
+                ensureSuccess(result, "Unable to read a USB device descriptor");
+
+                if (matches(descriptor.idVendor(), descriptor.idProduct())) {
+                    DeviceHandle handle = new DeviceHandle();
+                    result = LibUsb.open(device, handle);
+                    ensureSuccess(result, "ScreenDUO found but could not be opened");
+                    return Optional.of(handle);
+                }
+            }
+
+            return Optional.empty();
+        } finally {
+            LibUsb.freeDeviceList(devices, true);
+        }
     }
 
     private static void ensureSuccess(int result, String message) {
