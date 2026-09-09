@@ -44,12 +44,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Upload coverage reports to Codecov
-        if: matrix.os == 'ubuntu-latest'
+      - name: Upload JaCoCo report
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: mmilk23/screenduo-radar
+          files: target/site/jacoco/jacoco.xml
+          fail_ci_if_error: true
 
       - name: Upload test results to Codecov
         if: matrix.os == 'ubuntu-latest' && !cancelled()
@@ -59,10 +70,7 @@ jobs:
           slug: mmilk23/screenduo-radar
           report_type: test_results
           files: target/surefire-reports/TEST-*.xml
-
-      - name: Upload test results to Coveralls
-        if: matrix.os == 'ubuntu-latest'
-        uses: coverallsapp/github-action@v2    
+          fail_ci_if_error: true
 
   dependency-submission:
     name: Update dependency graph
