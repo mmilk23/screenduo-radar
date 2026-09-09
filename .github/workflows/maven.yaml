@@ -72,6 +72,14 @@ jobs:
           files: target/surefire-reports/TEST-*.xml
           fail_ci_if_error: true
 
+      - name: Upload coverage to Coveralls
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: target/site/jacoco/jacoco.xml
+          format: jacoco
+
   dependency-submission:
     name: Update dependency graph
     if: github.event_name == 'push'
