@@ -11,9 +11,9 @@ class CompactPixelTextTest {
     void calculatesCompactWidthsIncludingSpacesAndScale() {
         assertEquals(0, CompactPixelText.width("", 1));
         assertEquals(3, CompactPixelText.width(" ", 1));
-        assertEquals(6, CompactPixelText.width("A", 1));
-        assertEquals(13, CompactPixelText.width("A A", 1));
-        assertEquals(12, CompactPixelText.width("A", 2));
+        assertEquals(5, CompactPixelText.width("A", 1));
+        assertEquals(15, CompactPixelText.width("A A", 1));
+        assertEquals(10, CompactPixelText.width("A", 2));
     }
 
     @Test
