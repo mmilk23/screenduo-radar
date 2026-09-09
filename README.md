@@ -1,6 +1,8 @@
 # ScreenDUO Radar
 
 [![Maven CI](https://github.com/mmilk23/screenduo-radar/actions/workflows/maven.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/maven.yaml)
+[![Codecov](https://codecov.io/gh/mmilk23/screenduo-radar/graph/badge.svg)](https://codecov.io/gh/mmilk23/screenduo-radar)
+[![Coverage Status](https://coveralls.io/repos/github/mmilk23/screenduo-radar/badge.svg)](https://coveralls.io/github/mmilk23/screenduo-radar)
 [![Native Windows Build](https://github.com/mmilk23/screenduo-radar/actions/workflows/native-windows.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/native-windows.yaml)
 [![OWASP Dependency Check](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-check.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-check.yaml)
 [![Snyk](https://github.com/mmilk23/screenduo-radar/actions/workflows/snyk.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/snyk.yaml)
