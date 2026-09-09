@@ -60,7 +60,25 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
           CACHE_MATCHED_KEY: ${{ steps.dependency-check-cache.outputs.cache-matched-key }}
+          EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
         run: |
+          is_dependabot_pr=false
+          if [ "${EVENT_NAME}" = "pull_request" ] && [ "${ACTOR}" = "dependabot[bot]" ]; then
+            is_dependabot_pr=true
+          fi
+
+          if [ "${is_dependabot_pr}" = true ] && [ -z "${CACHE_MATCHED_KEY}" ]; then
+            echo "::warning::Skipping OWASP Dependency-Check for this Dependabot PR because Actions secrets are unavailable and no reusable NVD cache was found."
+            {
+              echo "### OWASP Dependency-Check"
+              echo
+              echo "Scan skipped for this Dependabot PR: the NVD API key is intentionally unavailable to Dependabot, and no reusable Dependency-Check cache was found."
+              echo "A scheduled or manually dispatched run can refresh the shared cache."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           run_check() {
             args=(
               mvn -B -Pdependency-check dependency-check:check
@@ -73,7 +91,9 @@ jobs:
               args+=("-DnvdApiKey=${NVD_API_KEY}")
             fi
 
-            if [ -n "${CACHE_MATCHED_KEY}" ]; then
+            # Pull requests consume an existing cache without updating it.
+            # Scheduled/manual runs are allowed to refresh NVD data.
+            if [ "${EVENT_NAME}" = "pull_request" ] && [ -n "${CACHE_MATCHED_KEY}" ]; then
               args+=("-DautoUpdate=false")
             fi
 
@@ -81,7 +101,12 @@ jobs:
           }
 
           if ! run_check; then
-            if [ -z "${CACHE_MATCHED_KEY}" ]; then
+            if [ "${is_dependabot_pr}" = true ]; then
+              echo "::error::The cached Dependency-Check database could not be used, and Dependabot cannot access the NVD API key."
+              exit 1
+            fi
+
+            if [ -z "${CACHE_MATCHED_KEY}" ] || [ -z "${NVD_API_KEY}" ]; then
               exit 1
             fi
 
@@ -93,7 +118,7 @@ jobs:
           fi
 
       - name: Refresh cache staging directory
-        if: success() && (github.event_name != 'pull_request' || steps.dependency-check-cache.outputs.cache-matched-key == '')
+        if: success() && github.event_name != 'pull_request'
         shell: bash
         run: |
           rm -rf "${DEPENDENCY_CHECK_CACHE}"
@@ -101,7 +126,7 @@ jobs:
           cp -a "${DEPENDENCY_CHECK_DATA}/." "${DEPENDENCY_CHECK_CACHE}/"
 
       - name: Save OWASP Dependency-Check data
-        if: success() && (github.event_name != 'pull_request' || steps.dependency-check-cache.outputs.cache-matched-key == '')
+        if: success() && github.event_name != 'pull_request'
         uses: actions/cache/save@v5
         with:
           path: ${{ env.DEPENDENCY_CHECK_CACHE }}
