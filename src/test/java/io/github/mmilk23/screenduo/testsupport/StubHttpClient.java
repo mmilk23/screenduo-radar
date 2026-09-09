@@ -21,10 +21,18 @@ import javax.net.ssl.SSLSession;
 public final class StubHttpClient extends HttpClient {
 
     private final int statusCode;
-    private final String body;
+    private final Object body;
     private HttpRequest lastRequest;
 
     public StubHttpClient(int statusCode, String body) {
+        this(statusCode, (Object) body);
+    }
+
+    public StubHttpClient(int statusCode, byte[] body) {
+        this(statusCode, (Object) body);
+    }
+
+    private StubHttpClient(int statusCode, Object body) {
         this.statusCode = statusCode;
         this.body = body;
     }
@@ -87,7 +95,7 @@ public final class StubHttpClient extends HttpClient {
     public <T> HttpResponse<T> send(HttpRequest request, HttpResponse.BodyHandler<T> responseBodyHandler)
             throws IOException, InterruptedException {
         lastRequest = request;
-        return (HttpResponse<T>) new StringResponse(request, statusCode, body);
+        return new StubResponse<>(request, statusCode, (T) body);
     }
 
     @Override
@@ -105,11 +113,11 @@ public final class StubHttpClient extends HttpClient {
         throw new UnsupportedOperationException("Async requests are not used by these tests.");
     }
 
-    private record StringResponse(HttpRequest request, int statusCode, String body)
-            implements HttpResponse<String> {
+    private record StubResponse<T>(HttpRequest request, int statusCode, T body)
+            implements HttpResponse<T> {
 
         @Override
-        public Optional<HttpResponse<String>> previousResponse() {
+        public Optional<HttpResponse<T>> previousResponse() {
             return Optional.empty();
         }
 
