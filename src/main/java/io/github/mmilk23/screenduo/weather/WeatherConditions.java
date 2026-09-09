@@ -9,6 +9,8 @@ public record WeatherConditions(
         Integer relativeHumidityPercent,
         Double precipitationMillimeters,
         Integer weatherCode,
+        Boolean isDay,
+        Double moonPhase,
         Integer cloudCoverPercent,
         Double pressureHectopascals,
         Double windSpeedKilometersPerHour,

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class WeatherScreenRendererTest {
 
     private static final WeatherConditions WEATHER = new WeatherConditions(
-            Instant.EPOCH, 17.2, 17.0, 84, 0.1, 51, 100, 1021.0, 11.4, 195.0);
+            Instant.EPOCH, 17.2, 17.0, 84, 0.1, 51, true, 0.5, 100, 1021.0, 11.4, 195.0);
 
     @Test
     void rendersWeatherAtScreenDuoResolution() {

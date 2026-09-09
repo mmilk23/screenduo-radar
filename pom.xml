@@ -150,6 +150,12 @@
                             <imageName>screenduo-radar</imageName>
                             <mainClass>io.github.mmilk23.screenduo.ScreenDuoApplication</mainClass>
                             <fallback>false</fallback>
+                            <buildArgs>
+                                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
+                            </buildArgs>
+                            <metadataRepository>
+                                <enabled>false</enabled>
+                            </metadataRepository>
                         </configuration>
                     </plugin>
                 </plugins>

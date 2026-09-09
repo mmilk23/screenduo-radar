@@ -1,13 +1,20 @@
 package io.github.mmilk23.screenduo;
 
+import io.github.mmilk23.screenduo.aircraft.AircraftBrowserController;
 import io.github.mmilk23.screenduo.aircraft.AircraftProvider;
 import io.github.mmilk23.screenduo.aircraft.NearbyAircraft;
 import io.github.mmilk23.screenduo.aircraft.opensky.OpenSkyAircraftProvider;
+import io.github.mmilk23.screenduo.airline.logo.CachedAirlineLogoProvider;
+import io.github.mmilk23.screenduo.flight.FlightRoute;
+import io.github.mmilk23.screenduo.flight.RouteCityEnricher;
+import io.github.mmilk23.screenduo.flight.ScheduledFlight;
+import io.github.mmilk23.screenduo.flight.siros.SirosFlightRouteProvider;
 import io.github.mmilk23.screenduo.airport.AirportBrowserController;
 import io.github.mmilk23.screenduo.airport.AirportProvider;
 import io.github.mmilk23.screenduo.airport.NearbyAirport;
 import io.github.mmilk23.screenduo.airport.ourairports.OurAirportsAirportProvider;
 import io.github.mmilk23.screenduo.config.ApplicationConfig;
+import io.github.mmilk23.screenduo.navigation.RadarDashboardController;
 import io.github.mmilk23.screenduo.device.ScreenDuoDevice;
 import io.github.mmilk23.screenduo.display.ClassicTvTestPattern;
 import io.github.mmilk23.screenduo.display.Display;
@@ -29,12 +36,16 @@ import org.usb4java.LibUsbException;
 
 public final class ScreenDuoApplication {
 
+    private static final String DASHBOARD_ARGUMENT = "--dashboard";
     private static final String API_TEST_ARGUMENT = "--api-test";
     private static final String WEATHER_SCREEN_ARGUMENT = "--weather-screen";
     private static final String AIRPORT_SCREEN_ARGUMENT = "--airport-screen";
+    private static final String AIRCRAFT_SCREEN_ARGUMENT = "--aircraft-screen";
     private static final String TEST_PATTERN_ARGUMENT = "--test-pattern";
     private static final String BUTTON_TEST_ARGUMENT = "--button-test";
+    private static final String TRACE_NAVIGATION_ARGUMENT = "--trace-navigation";
     private static final Duration BUTTON_TEST_DURATION = Duration.ofSeconds(30);
+    private static final Duration STARTUP_TEST_PATTERN_DURATION = Duration.ofMillis(900);
 
     private ScreenDuoApplication() {
     }
@@ -46,11 +57,22 @@ public final class ScreenDuoApplication {
                 return;
             }
 
-            boolean airportScreenRequested = hasArgument(args, AIRPORT_SCREEN_ARGUMENT);
+            boolean startupDashboardRequested = args.length == 0
+                    || (args.length == 1 && hasArgument(args, TRACE_NAVIGATION_ARGUMENT));
+            boolean dashboardRequested = startupDashboardRequested || hasArgument(args, DASHBOARD_ARGUMENT);
+            ApplicationConfig dashboardConfig =
+                    dashboardRequested ? ApplicationConfig.fromDefaultFile() : null;
+            boolean aircraftScreenRequested =
+                    !dashboardRequested && hasArgument(args, AIRCRAFT_SCREEN_ARGUMENT);
+            ApplicationConfig aircraftConfig =
+                    aircraftScreenRequested ? ApplicationConfig.fromDefaultFile() : null;
+            boolean airportScreenRequested =
+                    !dashboardRequested && !aircraftScreenRequested && hasArgument(args, AIRPORT_SCREEN_ARGUMENT);
             List<NearbyAirport> browserAirports =
                     airportScreenRequested ? loadNearbyAirports() : List.of();
             boolean weatherScreenRequested =
-                    !airportScreenRequested && hasArgument(args, WEATHER_SCREEN_ARGUMENT);
+                    !dashboardRequested && !aircraftScreenRequested && !airportScreenRequested
+                            && hasArgument(args, WEATHER_SCREEN_ARGUMENT);
             WeatherScreenData weatherScreen = weatherScreenRequested ? loadWeatherScreen() : null;
 
             Optional<ScreenDuoDevice> detectedDevice = ScreenDuoDevice.open();
@@ -66,6 +88,35 @@ public final class ScreenDuoApplication {
                         Short.toUnsignedInt(ScreenDuoDevice.VENDOR_ID),
                         Short.toUnsignedInt(ScreenDuoDevice.PRODUCT_ID));
                 System.out.print(device.descriptorReport());
+
+                if (dashboardRequested) {
+                    if (startupDashboardRequested) {
+                        showTestPattern(device);
+                        Thread.sleep(STARTUP_TEST_PATTERN_DURATION.toMillis());
+                    }
+                    SirosFlightRouteProvider siros = new SirosFlightRouteProvider();
+                    OurAirportsAirportProvider airports = new OurAirportsAirportProvider();
+                    RouteCityEnricher routeCities = new RouteCityEnricher(airports);
+                    new RadarDashboardController(device, device, dashboardConfig,
+                            new OpenMeteoWeatherProvider(), new OpenSkyAircraftProvider(),
+                            airports,
+                            (callsign, reference) -> enrichRoute(siros.findRoute(callsign, reference), routeCities),
+                            (airport, date) -> enrichFlights(siros.findFlights(airport, date), routeCities),
+                            new CachedAirlineLogoProvider())
+                            .run(hasArgument(args, TRACE_NAVIGATION_ARGUMENT));
+                    return;
+                }
+
+                if (aircraftScreenRequested) {
+                    SirosFlightRouteProvider siros = new SirosFlightRouteProvider();
+                    RouteCityEnricher routeCities = new RouteCityEnricher(new OurAirportsAirportProvider());
+                    new AircraftBrowserController(
+                            device, device, new OpenSkyAircraftProvider(),
+                            (callsign, reference) -> enrichRoute(siros.findRoute(callsign, reference), routeCities),
+                            new CachedAirlineLogoProvider(),
+                            aircraftConfig.location(), aircraftConfig.aircraftRadiusKm()).run();
+                    return;
+                }
 
                 if (airportScreenRequested) {
                     new AirportBrowserController(
@@ -90,7 +141,7 @@ public final class ScreenDuoApplication {
                 }
                 if (!testPatternRequested && !buttonTestRequested && !weatherScreenRequested) {
                     System.out.println("Diagnostic mode only. Use --test-pattern, --button-test, "
-                            + "--weather-screen, --airport-screen or --api-test.");
+                            + "--dashboard, --weather-screen, --airport-screen, --aircraft-screen or --api-test.");
                 }
             }
         } catch (IOException exception) {
@@ -103,9 +154,30 @@ public final class ScreenDuoApplication {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             System.err.println("Operation interrupted.");
+        } catch (Throwable throwable) {
+            System.err.println("Unexpected ScreenDUO Radar failure: "
+                    + throwable.getClass().getName() + ": " + throwable.getMessage());
+            throwable.printStackTrace(System.err);
+            System.exit(1);
         }
     }
 
+
+    private static Optional<FlightRoute> enrichRoute(
+            Optional<FlightRoute> route, RouteCityEnricher routeCities)
+            throws IOException, InterruptedException {
+        return route.isPresent() ? Optional.of(routeCities.enrich(route.orElseThrow())) : Optional.empty();
+    }
+
+    private static List<ScheduledFlight> enrichFlights(
+            List<ScheduledFlight> flights, RouteCityEnricher routeCities)
+            throws IOException, InterruptedException {
+        List<ScheduledFlight> enriched = new java.util.ArrayList<>(flights.size());
+        for (ScheduledFlight flight : flights) {
+            enriched.add(routeCities.enrich(flight));
+        }
+        return List.copyOf(enriched);
+    }
     private static List<NearbyAirport> loadNearbyAirports()
             throws IOException, InterruptedException {
         ApplicationConfig config = ApplicationConfig.fromDefaultFile();

@@ -51,6 +51,42 @@ class OurAirportsAirportProviderTest {
         assertEquals("SMALL", result.getFirst().ident());
     }
 
+    @Test
+    void findsCitiesByIcaoIdent() throws IOException, InterruptedException {
+        Path data = writeData("""
+                1,SBGL,large_airport,Rio Airport,-22.8,-43.2,28,SA,BR,BR-RJ,Rio de Janeiro,yes,SBGL,GIG,,,
+                2,SBRJ,medium_airport,Santos Dumont Airport,-22.9,-43.1,11,SA,BR,BR-RJ,Rio de Janeiro,yes,SBRJ,SDU,,,
+                3,LFPG,large_airport,Charles de Gaulle Airport,49.0,2.5,392,EU,FR,FR-IDF,"Paris (Roissy-en-France, Val-d'Oise)",yes,LFPG,CDG,,,
+                4,SBNF,medium_airport,Navegantes Airport,-26.8,-48.6,18,SA,BR,BR-SC,Navegantes,yes,SBNF,NVT,,,
+                """);
+        OurAirportsAirportProvider provider =
+                new OurAirportsAirportProvider(() -> data);
+
+        assertEquals("Rio de Janeiro", provider.findCity(" sbgl ").orElseThrow());
+        assertEquals("Navegantes", provider.findCity("SBNF").orElseThrow());
+        assertEquals("Rio de Janeiro / GIG", provider.findAirportCity("SBGL").orElseThrow().displayName());
+        assertEquals("Rio de Janeiro / SDU", provider.findAirportCity("SBRJ").orElseThrow().displayName());
+        assertEquals("Paris", provider.findCity("LFPG").orElseThrow());
+        assertEquals("Paris", provider.findAirportCity("LFPG").orElseThrow().displayName());
+        assertEquals(java.util.Optional.empty(), provider.findCity("SBXX"));
+    }
+
+
+    @Test
+    void ignoresNonScheduledAndSmallAirportsWhenDecidingCityAmbiguity()
+            throws IOException, InterruptedException {
+        Path data = writeData("""
+                1,SBKP,large_airport,Viracopos Airport,-23.0,-47.1,2170,SA,BR,BR-SP,Campinas,yes,SBKP,VCP,,,
+                2,SDAM,small_airport,Amarais Airport,-22.8,-47.1,2010,SA,BR,BR-SP,Campinas,no,SDAM,CPQ,,,
+                3,SBVT,medium_airport,Vitoria Airport,-20.2,-40.3,11,SA,BR,BR-ES,Vitoria,yes,SBVT,VIX,,,
+                4,SNXX,small_airport,Vitoria Small Airport,-20.3,-40.4,20,SA,BR,BR-ES,Vitoria,no,SNXX,,,,
+                """);
+        OurAirportsAirportProvider provider =
+                new OurAirportsAirportProvider(() -> data);
+
+        assertEquals("Campinas", provider.findAirportCity("SBKP").orElseThrow().displayName());
+        assertEquals("Vitoria", provider.findAirportCity("SBVT").orElseThrow().displayName());
+    }
     private Path writeData(String rows) throws IOException {
         return Files.writeString(temporaryDirectory.resolve("airports.csv"),
                 "id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,"

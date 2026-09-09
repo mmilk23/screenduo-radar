@@ -19,8 +19,14 @@ public final class CachedHttpFile implements TextDataSource {
     private final Path cacheFile;
     private final Duration maximumAge;
     private final HttpClient httpClient;
+    private final String accept;
 
     public CachedHttpFile(URI source, Path cacheFile, Duration maximumAge) {
+        this(source, cacheFile, maximumAge, "text/csv,text/plain");
+    }
+
+    public CachedHttpFile(URI source, Path cacheFile, Duration maximumAge, String accept) {
+        this.accept = accept;
         this.source = source;
         this.cacheFile = cacheFile;
         this.maximumAge = maximumAge;
@@ -63,7 +69,7 @@ public final class CachedHttpFile implements TextDataSource {
         try {
             HttpRequest request = HttpRequest.newBuilder(source)
                     .timeout(Duration.ofSeconds(60))
-                    .header("Accept", "text/csv,text/plain")
+                    .header("Accept", accept)
                     .header("User-Agent", "screenduo-radar/0.1")
                     .GET()
                     .build();

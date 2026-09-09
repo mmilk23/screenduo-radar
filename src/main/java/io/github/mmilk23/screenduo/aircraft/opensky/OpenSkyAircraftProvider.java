@@ -103,6 +103,7 @@ public final class OpenSkyAircraftProvider implements AircraftProvider {
         return new NearbyAircraft(
                 text(state, 0),
                 callsign,
+                extractAirlineIcaoCode(callsign),
                 airlineResolver.resolve(callsign).orElse(""),
                 text(state, 2),
                 position,
@@ -112,6 +113,23 @@ public final class OpenSkyAircraftProvider implements AircraftProvider {
                 velocity == null ? null : velocity * 3.6,
                 number(state, 10),
                 state.path(8).asBoolean(false));
+    }
+
+    private static String extractAirlineIcaoCode(String callsign) {
+        if (callsign == null) {
+            return "";
+        }
+        String normalized = callsign.trim().toUpperCase(Locale.ROOT);
+        if (normalized.length() < 3) {
+            return "";
+        }
+        String code = normalized.substring(0, 3);
+        for (int index = 0; index < code.length(); index++) {
+            if (!Character.isLetter(code.charAt(index))) {
+                return "";
+            }
+        }
+        return code;
     }
 
     private static String text(JsonNode state, int index) {

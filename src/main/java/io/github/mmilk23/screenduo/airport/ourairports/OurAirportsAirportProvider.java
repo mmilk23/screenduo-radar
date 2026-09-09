@@ -1,5 +1,7 @@
 package io.github.mmilk23.screenduo.airport.ourairports;
 
+import io.github.mmilk23.screenduo.airport.AirportCity;
+import io.github.mmilk23.screenduo.airport.AirportCityProvider;
 import io.github.mmilk23.screenduo.airport.AirportProvider;
 import io.github.mmilk23.screenduo.airport.NearbyAirport;
 import io.github.mmilk23.screenduo.data.CachedHttpFile;
@@ -10,13 +12,18 @@ import io.github.mmilk23.screenduo.location.GeoPoint;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
-public final class OurAirportsAirportProvider implements AirportProvider {
+public final class OurAirportsAirportProvider implements AirportProvider, AirportCityProvider {
 
     private static final URI DATA_URI = URI.create(
             "https://davidmegginson.github.io/ourairports-data/airports.csv");
@@ -26,6 +33,7 @@ public final class OurAirportsAirportProvider implements AirportProvider {
     private static final String FALLBACK_TYPE = "small_airport";
 
     private final TextDataSource dataSource;
+    private Map<String, AirportCity> citiesByIdent;
 
     public OurAirportsAirportProvider() {
         this(new CachedHttpFile(
@@ -49,6 +57,62 @@ public final class OurAirportsAirportProvider implements AirportProvider {
         List<NearbyAirport> selected = primary.isEmpty() ? fallback : primary;
         selected.sort(Comparator.comparingDouble(NearbyAirport::distanceKm));
         return List.copyOf(selected);
+    }
+
+    @Override
+    public Optional<AirportCity> findAirportCity(String airportIcao) throws IOException, InterruptedException {
+        String code = airportIcao.trim().toUpperCase(Locale.ROOT);
+        if (!code.matches("[A-Z]{4}")) {
+            return Optional.empty();
+        }
+        if (citiesByIdent == null) {
+            citiesByIdent = loadCitiesByIdent();
+        }
+        return Optional.ofNullable(citiesByIdent.get(code));
+    }
+
+    private Map<String, AirportCity> loadCitiesByIdent() throws IOException, InterruptedException {
+        List<AirportRow> airports = new ArrayList<>();
+        CsvReader.read(dataSource.get(), row -> {
+            if (row.size() >= 16 && !"id".equals(row.get(0))) {
+                AirportRow airport = airportRow(row);
+                if (airport != null) {
+                    airports.add(airport);
+                }
+            }
+        });
+
+        Map<String, Integer> airportsByCity = new HashMap<>();
+        for (AirportRow airport : airports) {
+            if (airport.hasScheduledService() && PRIMARY_TYPES.contains(airport.type())) {
+                airportsByCity.merge(normalizeCity(airport.city()), 1, Integer::sum);
+            }
+        }
+
+        Map<String, AirportCity> cities = new HashMap<>();
+        for (AirportRow airport : airports) {
+            String displayName = airport.city();
+            if (airportsByCity.getOrDefault(normalizeCity(airport.city()), 0) > 1) {
+                String code = airport.iataCode().isBlank() ? airport.ident() : airport.iataCode();
+                displayName = airport.city() + " / " + code;
+            }
+            cities.putIfAbsent(airport.ident(), new AirportCity(airport.city(), displayName));
+        }
+        return Map.copyOf(cities);
+    }
+
+    private static AirportRow airportRow(List<String> row) {
+        String ident = row.get(1).trim().toUpperCase(Locale.ROOT);
+        String city = cityLabel(row.get(10));
+        if (!ident.matches("[A-Z]{4}") || city.isBlank()) {
+            return null;
+        }
+        return new AirportRow(
+                ident,
+                row.get(2).trim(),
+                row.get(13).trim().toUpperCase(Locale.ROOT),
+                city,
+                "yes".equalsIgnoreCase(row.get(11).trim()));
     }
 
     private static void addIfNearby(
@@ -104,6 +168,19 @@ public final class OurAirportsAirportProvider implements AirportProvider {
         }
     }
 
+    private static String cityLabel(String value) {
+        int parenthesis = value.indexOf('(');
+        String city = parenthesis >= 0 ? value.substring(0, parenthesis) : value;
+        return city.trim();
+    }
+
+    private static String normalizeCity(String value) {
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .trim()
+                .toUpperCase(Locale.ROOT);
+    }
+
     private static Double decimal(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -113,5 +190,9 @@ public final class OurAirportsAirportProvider implements AirportProvider {
         } catch (NumberFormatException exception) {
             return null;
         }
+    }
+
+    private record AirportRow(
+            String ident, String type, String iataCode, String city, boolean hasScheduledService) {
     }
 }

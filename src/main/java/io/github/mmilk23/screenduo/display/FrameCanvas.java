@@ -81,6 +81,21 @@ public final class FrameCanvas {
         return text.isEmpty() ? 0 : text.length() * 6 * scale - scale;
     }
 
+    public void drawFrame(RgbFrame source, int x, int y, int scale) {
+        if (scale <= 0) {
+            throw new IllegalArgumentException("Frame scale must be positive.");
+        }
+        for (int sourceY = 0; sourceY < source.geometry().height(); sourceY++) {
+            for (int sourceX = 0; sourceX < source.geometry().width(); sourceX++) {
+                RgbColor color = new RgbColor(
+                        source.redAt(sourceX, sourceY),
+                        source.greenAt(sourceX, sourceY),
+                        source.blueAt(sourceX, sourceY));
+                fillRectangle(x + sourceX * scale, y + sourceY * scale, scale, scale, color);
+            }
+        }
+    }
+
     private void drawCharacter(char character, int x, int y, int scale, RgbColor color) {
         int[] glyph = PixelFont.glyph(character);
         for (int row = 0; row < glyph.length; row++) {
