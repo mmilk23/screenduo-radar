@@ -2,7 +2,6 @@
 
 [![Maven CI](https://github.com/mmilk23/screenduo-radar/actions/workflows/maven.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/maven.yaml)
 [![Native Windows Build](https://github.com/mmilk23/screenduo-radar/actions/workflows/native-windows.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/native-windows.yaml)
-[![Dependency Review](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-review.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-review.yaml)
 [![OWASP Dependency Check](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-check.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/dependency-check.yaml)
 [![Snyk](https://github.com/mmilk23/screenduo-radar/actions/workflows/snyk.yaml/badge.svg)](https://github.com/mmilk23/screenduo-radar/actions/workflows/snyk.yaml)
 [![Last Updated](https://img.shields.io/github/last-commit/mmilk23/screenduo-radar.svg)](https://github.com/mmilk23/screenduo-radar/commits/main)
