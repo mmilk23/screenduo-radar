@@ -15,6 +15,9 @@ jobs:
     name: OWASP Dependency-Check
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      DEPENDENCY_CHECK_CACHE: ${{ github.workspace }}/.dependency-check-cache
+      DEPENDENCY_CHECK_DATA: ${{ github.workspace }}/.dependency-check-data
 
     steps:
       - name: Checkout
@@ -27,22 +30,82 @@ jobs:
           distribution: graalvm
           cache: maven
 
+      - name: Generate weekly cache key
+        id: cache-key
+        shell: bash
+        run: echo "week=$(date -u +'%G-%V')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore OWASP Dependency-Check data
+        id: dependency-check-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ env.DEPENDENCY_CHECK_CACHE }}
+          key: dependency-check-data-v4-${{ runner.os }}-${{ steps.cache-key.outputs.week }}-${{ github.run_id }}
+          restore-keys: |
+            dependency-check-data-v4-${{ runner.os }}-${{ steps.cache-key.outputs.week }}-
+            dependency-check-data-v4-${{ runner.os }}-
+
+      - name: Prepare OWASP working data
+        shell: bash
+        run: |
+          rm -rf "${DEPENDENCY_CHECK_DATA}"
+          mkdir -p "${DEPENDENCY_CHECK_DATA}"
+
+          if [ -d "${DEPENDENCY_CHECK_CACHE}" ] && [ "$(find "${DEPENDENCY_CHECK_CACHE}" -mindepth 1 -print -quit)" ]; then
+            cp -a "${DEPENDENCY_CHECK_CACHE}/." "${DEPENDENCY_CHECK_DATA}/"
+          fi
+
       - name: Run OWASP Dependency-Check
         shell: bash
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          CACHE_MATCHED_KEY: ${{ steps.dependency-check-cache.outputs.cache-matched-key }}
         run: |
-          args=(
-            mvn -B -Pdependency-check dependency-check:check
-            -DskipTests
-            --file pom.xml
-          )
+          run_check() {
+            args=(
+              mvn -B -Pdependency-check dependency-check:check
+              -DskipTests
+              "-DdataDirectory=${DEPENDENCY_CHECK_DATA}"
+              --file pom.xml
+            )
 
-          if [ -n "${NVD_API_KEY}" ]; then
-            args+=("-DnvdApiKey=${NVD_API_KEY}")
+            if [ -n "${NVD_API_KEY}" ]; then
+              args+=("-DnvdApiKey=${NVD_API_KEY}")
+            fi
+
+            if [ -n "${CACHE_MATCHED_KEY}" ]; then
+              args+=("-DautoUpdate=false")
+            fi
+
+            "${args[@]}"
+          }
+
+          if ! run_check; then
+            if [ -z "${CACHE_MATCHED_KEY}" ]; then
+              exit 1
+            fi
+
+            echo "Cached Dependency-Check data failed; retrying once with a clean database."
+            rm -rf "${DEPENDENCY_CHECK_DATA}"
+            mkdir -p "${DEPENDENCY_CHECK_DATA}"
+            CACHE_MATCHED_KEY=""
+            run_check
           fi
 
-          "${args[@]}"
+      - name: Refresh cache staging directory
+        if: success() && (github.event_name != 'pull_request' || steps.dependency-check-cache.outputs.cache-matched-key == '')
+        shell: bash
+        run: |
+          rm -rf "${DEPENDENCY_CHECK_CACHE}"
+          mkdir -p "${DEPENDENCY_CHECK_CACHE}"
+          cp -a "${DEPENDENCY_CHECK_DATA}/." "${DEPENDENCY_CHECK_CACHE}/"
+
+      - name: Save OWASP Dependency-Check data
+        if: success() && (github.event_name != 'pull_request' || steps.dependency-check-cache.outputs.cache-matched-key == '')
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ env.DEPENDENCY_CHECK_CACHE }}
+          key: dependency-check-data-v4-${{ runner.os }}-${{ steps.cache-key.outputs.week }}-${{ github.run_id }}
 
       - name: Upload OWASP Dependency-Check report
         if: always()
