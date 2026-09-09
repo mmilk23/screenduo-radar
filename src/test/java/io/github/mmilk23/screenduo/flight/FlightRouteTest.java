@@ -12,11 +12,11 @@ class FlightRouteTest {
     private static final Instant ARRIVAL = Instant.parse("2026-09-09T13:00:00Z");
 
     @Test
-    void usesIcaoWhenDisplayNamesAreMissing() {
+    void fourArgumentConstructorUsesIcaoAsDisplayName() {
         FlightRoute route = new FlightRoute("SBGL", "SBSP", DEPARTURE, ARRIVAL);
 
-        assertEquals("SBGL", route.originLabel());
-        assertEquals("SBSP", route.destinationLabel());
+        assertEquals("SBGL (SBGL)", route.originLabel());
+        assertEquals("SBSP (SBSP)", route.destinationLabel());
         assertEquals("SBGL", route.originDisplayName());
         assertEquals("SBSP", route.destinationDisplayName());
     }
