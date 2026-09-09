@@ -164,18 +164,17 @@ class PngLogoDecoderTest {
 
     private static void writeChunk(ByteArrayOutputStream output, String type, byte[] payload)
             throws IOException {
-        try (DataOutputStream data = new DataOutputStream(output)) {
-            data.writeInt(payload.length);
-            data.write(type.getBytes(StandardCharsets.US_ASCII));
-            data.write(payload);
-            data.writeInt(0);
-            data.flush();
-        }
+        DataOutputStream data = new DataOutputStream(output);
+        data.writeInt(payload.length);
+        data.write(type.getBytes(StandardCharsets.US_ASCII));
+        data.write(payload);
+        data.writeInt(0);
+        data.flush();
     }
 
     private static void assertPixel(RgbFrame frame, int x, int y, int red, int green, int blue) {
-        assertEquals(red, frame.red(x, y));
-        assertEquals(green, frame.green(x, y));
-        assertEquals(blue, frame.blue(x, y));
+        assertEquals(red, frame.redAt(x, y));
+        assertEquals(green, frame.greenAt(x, y));
+        assertEquals(blue, frame.blueAt(x, y));
     }
 }
