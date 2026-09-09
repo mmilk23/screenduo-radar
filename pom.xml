@@ -23,7 +23,7 @@
         <dependency-check.version>13.0.0</dependency-check.version>
         <jacoco.version>0.8.14</jacoco.version>
 
-        <maven.compiler.plugin.version>3.14.0</maven.compiler.plugin.version>
+        <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
         <exec.maven.plugin.version>3.6.3</exec.maven.plugin.version>
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
         <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
