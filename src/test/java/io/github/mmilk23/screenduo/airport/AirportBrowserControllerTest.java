@@ -30,6 +30,7 @@ class AirportBrowserControllerTest {
                 DisplayButton.DOWN,
                 DisplayButton.CONFIRM,
                 DisplayButton.BACK,
+                DisplayButton.UNKNOWN,
                 DisplayButton.BACK);
         RecordingWeatherProvider weather = new RecordingWeatherProvider(sampleWeather());
         AirportBrowserController controller = new AirportBrowserController(
@@ -76,7 +77,8 @@ class AirportBrowserControllerTest {
     @Test
     void showsWeatherErrorAndAllowsBackNavigation() throws Exception {
         RecordingDisplay display = new RecordingDisplay();
-        QueueControls controls = new QueueControls(DisplayButton.CONFIRM, DisplayButton.BACK, DisplayButton.BACK);
+        QueueControls controls = new QueueControls(
+                DisplayButton.CONFIRM, DisplayButton.BACK, DisplayButton.UNKNOWN, DisplayButton.BACK);
         WeatherProvider weather = location -> { throw new IOException("offline"); };
         AirportBrowserController controller = new AirportBrowserController(
                 display, controls, airports(), weather);
