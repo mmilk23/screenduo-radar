@@ -44,6 +44,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Upload coverage reports to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: mmilk23/screenduo-radar
+
+      - name: Upload test results to Codecov
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: mmilk23/screenduo-radar
+          report_type: test_results
+          files: target/surefire-reports/TEST-*.xml
+
+      - name: Upload test results to Coveralls
+        if: matrix.os == 'ubuntu-latest'
+        uses: coverallsapp/github-action@v2    
+
   dependency-submission:
     name: Update dependency graph
     if: github.event_name == 'push'
