@@ -50,7 +50,12 @@ jobs:
           New-Item -ItemType Directory -Force $package | Out-Null
           Copy-Item -LiteralPath "target/screenduo-radar.exe" -Destination $package
           Get-ChildItem -LiteralPath "target" -Filter *.dll -File | Copy-Item -Destination $package
-          if (Test-Path -LiteralPath "README.md") { Copy-Item -LiteralPath "README.md" -Destination $package }
+          if (Test-Path -LiteralPath "config.ini.example") {
+            Copy-Item -LiteralPath "config.ini.example" -Destination $package
+          }
+          if (Test-Path -LiteralPath "README.md") {
+            Copy-Item -LiteralPath "README.md" -Destination $package
+          }
           if (Test-Path -LiteralPath "docs/WINDOWS-SERVICE.md") {
             Copy-Item -LiteralPath "docs/WINDOWS-SERVICE.md" -Destination $package
           }
@@ -60,12 +65,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: screenduo-radar-windows-native
-          path: target/screenduo-radar-windows-native.zip
+          path: |
+            target/screenduo-radar.exe
+            target/screenduo-radar-windows-native.zip
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach package to release
+      - name: Attach Windows downloads to release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: target/screenduo-radar-windows-native.zip
+          files: |
+            target/screenduo-radar.exe
+            target/screenduo-radar-windows-native.zip
