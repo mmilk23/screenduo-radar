@@ -47,7 +47,7 @@ jobs:
           fi
 
       - name: Run Snyk test
-        if: steps.snyk-token.outputs.enabled ==  true
+        if: steps.snyk-token.outputs.enabled == 'true'
         id: snyk-test
         shell: bash
         env:
@@ -65,11 +65,11 @@ jobs:
           sarif_file: snyk.sarif
 
       - name: Monitor project in Snyk
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.snyk-token.outputs.enabled == 'true'
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: snyk monitor --file=pom.xml --package-manager=maven
 
       - name: Fail on Snyk findings
-        if: steps.snyk-test.outputs.exit_code != '0'
+        if: steps.snyk-test.outputs.exit_code != '' && steps.snyk-test.outputs.exit_code != '0'
         run: exit 1
