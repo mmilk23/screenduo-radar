@@ -20,9 +20,11 @@ hs_err_pid*
 # Generated modernization files
 .github/modernize/
 
-# Local configuration and secrets
+# Local configuration, downloaded data and secrets
 .env
+config.ini
 config.yaml
+data/cache/
 
 # Operating systems
 .DS_Store

@@ -1,0 +1,13 @@
+<service>
+  <id>screenduo-radar</id>
+  <name>ScreenDUO Radar</name>
+  <description>Interactive ScreenDUO weather, clock, aircraft and airport dashboard.</description>
+  <executable>%JAVA_HOME%\bin\java.exe</executable>
+  <arguments>--enable-native-access=ALL-UNNAMED -cp "%BASE%\screenduo-radar.jar;%BASE%\lib\*" io.github.mmilk23.screenduo.ScreenDuoApplication --dashboard</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll"></log>
+  <onfailure action="restart" delay="10 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>15 sec</stoptimeout>
+</service>

@@ -1,0 +1,71 @@
+name: Native Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  native-windows:
+    name: Build Windows native executable
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up GraalVM JDK 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: graalvm
+          java-version: "25"
+          architecture: x64
+          cache: maven
+
+      - name: Locate Visual Studio C++ tools
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vcvars = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find "VC\Auxiliary\Build\vcvars64.bat"
+          if (-not $vcvars) {
+            throw "Visual Studio C++ x64 build tools were not found."
+          }
+          "VCVARS64=$vcvars" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build native executable
+        shell: cmd
+        run: scripts\build-native-windows.cmd -DskipTests
+
+      - name: Stage native package
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD "target/native-package"
+          New-Item -ItemType Directory -Force $package | Out-Null
+          Copy-Item -LiteralPath "target/screenduo-radar.exe" -Destination $package
+          Get-ChildItem -LiteralPath "target" -Filter *.dll -File | Copy-Item -Destination $package
+          if (Test-Path -LiteralPath "README.md") { Copy-Item -LiteralPath "README.md" -Destination $package }
+          if (Test-Path -LiteralPath "docs/WINDOWS-SERVICE.md") {
+            Copy-Item -LiteralPath "docs/WINDOWS-SERVICE.md" -Destination $package
+          }
+          Compress-Archive -Path (Join-Path $package "*") -DestinationPath "target/screenduo-radar-windows-native.zip" -Force
+
+      - name: Upload native package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenduo-radar-windows-native
+          path: target/screenduo-radar-windows-native.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach package to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: target/screenduo-radar-windows-native.zip

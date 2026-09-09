@@ -20,10 +20,12 @@
         <slf4j.version>2.0.17</slf4j.version>
         <usb4java.version>1.3.0</usb4java.version>
         <native.maven.plugin.version>1.1.12</native.maven.plugin.version>
+        <dependency-check.version>13.0.0</dependency-check.version>
 
         <maven.compiler.plugin.version>3.14.0</maven.compiler.plugin.version>
+        <exec.maven.plugin.version>3.6.3</exec.maven.plugin.version>
         <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
-        <maven.jar.plugin.version>>3.5.1</maven.jar.plugin.version>
+        <maven.jar.plugin.version>3.5.1</maven.jar.plugin.version>
         <maven.surefire.plugin.version>3.5.4</maven.surefire.plugin.version>
     </properties>
 
@@ -87,6 +89,15 @@
             </plugin>
 
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec.maven.plugin.version}</version>
+                <configuration>
+                    <mainClass>io.github.mmilk23.screenduo.ScreenDuoApplication</mainClass>
+                </configuration>
+            </plugin>
+
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>${maven.compiler.plugin.version}</version>
@@ -140,10 +151,42 @@
                             <imageName>screenduo-radar</imageName>
                             <mainClass>io.github.mmilk23.screenduo.ScreenDuoApplication</mainClass>
                             <fallback>false</fallback>
+                            <buildArgs>
+                                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
+                            </buildArgs>
+                            <metadataRepository>
+                                <enabled>false</enabled>
+                            </metadataRepository>
                         </configuration>
                     </plugin>
                 </plugins>
             </build>
         </profile>
+        <profile>
+			<id>dependency-check</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.owasp</groupId>
+						<artifactId>dependency-check-maven</artifactId>
+						<version>${dependency-check.version}</version>
+						<configuration>
+							<failBuildOnCVSS>7.0</failBuildOnCVSS>
+							<formats>
+								<format>HTML</format>
+								<format>JSON</format>
+							</formats>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>check</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
     </profiles>
 </project>
