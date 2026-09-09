@@ -45,7 +45,9 @@ class AirportBrowserControllerTest {
     @Test
     void wrapsSelectionUpFromFirstAirport() throws Exception {
         RecordingDisplay display = new RecordingDisplay();
-        QueueControls controls = new QueueControls(DisplayButton.UP, DisplayButton.CONFIRM, DisplayButton.BACK);
+        QueueControls controls = new QueueControls(
+                DisplayButton.UP, DisplayButton.CONFIRM, DisplayButton.BACK,
+                DisplayButton.UNKNOWN, DisplayButton.BACK);
         RecordingWeatherProvider weather = new RecordingWeatherProvider(sampleWeather());
         AirportBrowserController controller = new AirportBrowserController(
                 display, controls, airports(), weather);
@@ -64,6 +66,8 @@ class AirportBrowserControllerTest {
                 DisplayButton.UNKNOWN,
                 DisplayButton.DOWN,
                 DisplayButton.CONFIRM,
+                DisplayButton.BACK,
+                DisplayButton.UNKNOWN,
                 DisplayButton.BACK);
         RecordingWeatherProvider weather = new RecordingWeatherProvider(sampleWeather());
         AirportBrowserController controller = new AirportBrowserController(
