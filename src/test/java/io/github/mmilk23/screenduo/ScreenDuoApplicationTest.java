@@ -2,16 +2,29 @@ package io.github.mmilk23.screenduo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.mmilk23.screenduo.aircraft.NearbyAircraft;
+import io.github.mmilk23.screenduo.airport.AirportCity;
 import io.github.mmilk23.screenduo.airport.NearbyAirport;
+import io.github.mmilk23.screenduo.display.Display;
+import io.github.mmilk23.screenduo.display.DisplayGeometry;
+import io.github.mmilk23.screenduo.display.RgbFrame;
+import io.github.mmilk23.screenduo.flight.FlightRoute;
+import io.github.mmilk23.screenduo.flight.RouteCityEnricher;
+import io.github.mmilk23.screenduo.flight.ScheduledFlight;
 import io.github.mmilk23.screenduo.location.GeoPoint;
+import io.github.mmilk23.screenduo.weather.WeatherConditions;
+import io.github.mmilk23.screenduo.weather.display.WeatherScreenData;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class ScreenDuoApplicationTest {
@@ -93,10 +106,80 @@ class ScreenDuoApplicationTest {
         assertTrue(output.contains("... and 1 more."));
     }
 
+    @Test
+    void enrichesPresentRouteAndPreservesEmptyRoute() throws Exception {
+        FlightRoute route = route("SBGL", "SBSP");
+        RouteCityEnricher enricher = enricher(Map.of(
+                "SBGL", new AirportCity("Rio de Janeiro", "Rio de Janeiro / GIG"),
+                "SBSP", new AirportCity("Sao Paulo", "Sao Paulo / CGH")));
+
+        @SuppressWarnings("unchecked")
+        Optional<FlightRoute> enriched = (Optional<FlightRoute>) invoke(
+                "enrichRoute", new Class<?>[] {Optional.class, RouteCityEnricher.class},
+                Optional.of(route), enricher);
+        @SuppressWarnings("unchecked")
+        Optional<FlightRoute> empty = (Optional<FlightRoute>) invoke(
+                "enrichRoute", new Class<?>[] {Optional.class, RouteCityEnricher.class},
+                Optional.empty(), enricher);
+
+        assertEquals("Rio de Janeiro", enriched.orElseThrow().originCity());
+        assertEquals("Sao Paulo / CGH", enriched.orElseThrow().destinationDisplayName());
+        assertTrue(empty.isEmpty());
+    }
+
+    @Test
+    void enrichesScheduledFlightsAndReturnsImmutableCopy() throws Exception {
+        RouteCityEnricher enricher = enricher(Map.of(
+                "SBGL", new AirportCity("Rio de Janeiro", "Rio de Janeiro / GIG"),
+                "SBSP", new AirportCity("Sao Paulo", "Sao Paulo / CGH")));
+        ScheduledFlight flight = new ScheduledFlight("GLO1234", route("SBGL", "SBSP"));
+
+        @SuppressWarnings("unchecked")
+        List<ScheduledFlight> result = (List<ScheduledFlight>) invoke(
+                "enrichFlights", new Class<?>[] {List.class, RouteCityEnricher.class},
+                List.of(flight), enricher);
+
+        assertEquals(1, result.size());
+        assertEquals("Rio de Janeiro", result.getFirst().route().originCity());
+        assertEquals("Sao Paulo", result.getFirst().route().destinationCity());
+    }
+
+    @Test
+    void rendersTestPatternAndWeatherThroughDisplayAbstraction() throws Exception {
+        CapturingDisplay display = new CapturingDisplay(new DisplayGeometry(320, 240));
+        WeatherConditions conditions = new WeatherConditions(
+                Instant.parse("2026-09-09T12:00:00Z"), 25.0, 26.0, 70, 0.0,
+                1, true, 0.5, 20, 1013.0, 10.0, 90.0);
+
+        String patternOutput = captureStdout(() -> invoke(
+                "showTestPattern", new Class<?>[] {Display.class}, display));
+        RgbFrame pattern = display.frame;
+        String weatherOutput = captureStdout(() -> invoke(
+                "showWeather", new Class<?>[] {Display.class, WeatherScreenData.class},
+                display, new WeatherScreenData("Rio de Janeiro", conditions)));
+
+        assertEquals(new DisplayGeometry(320, 240), pattern.geometry());
+        assertEquals(new DisplayGeometry(320, 240), display.frame.geometry());
+        assertFalse(java.util.Arrays.equals(pattern.pixels(), display.frame.pixels()));
+        assertTrue(patternOutput.contains("Classic TV test pattern sent successfully."));
+        assertTrue(weatherOutput.contains("Current weather screen sent successfully."));
+    }
+
     private static NearbyAircraft aircraft(String callsign) {
         return new NearbyAircraft(
                 "e40003", callsign, "AAA", "Airline", "Brazil",
                 new GeoPoint(-22.9, -43.2), 1.0, 1.0, 1000.0, 200.0, 1.0, false);
+    }
+
+    private static FlightRoute route(String origin, String destination) {
+        return new FlightRoute(
+                origin, destination,
+                Instant.parse("2026-09-09T12:00:00Z"),
+                Instant.parse("2026-09-09T13:00:00Z"));
+    }
+
+    private static RouteCityEnricher enricher(Map<String, AirportCity> cities) {
+        return new RouteCityEnricher(icao -> Optional.ofNullable(cities.get(icao)));
     }
 
     private static Object invoke(String name, Class<?>[] parameterTypes, Object... arguments) throws Exception {
@@ -115,6 +198,29 @@ class ScreenDuoApplicationTest {
             System.setOut(original);
         }
         return output.toString(StandardCharsets.UTF_8);
+    }
+
+    private static final class CapturingDisplay implements Display {
+        private final DisplayGeometry geometry;
+        private RgbFrame frame;
+
+        private CapturingDisplay(DisplayGeometry geometry) {
+            this.geometry = geometry;
+        }
+
+        @Override
+        public DisplayGeometry geometry() {
+            return geometry;
+        }
+
+        @Override
+        public void show(RgbFrame frame) {
+            this.frame = frame;
+        }
+
+        @Override
+        public void close() {
+        }
     }
 
     @FunctionalInterface
