@@ -8,7 +8,13 @@ import org.junit.jupiter.api.Test;
 class ScreenDuoButtonMapperTest {
 
     @Test
-    void mapsKnownApplicationButtons() {
+    void mapsAllKnownButtons() {
+        assertEquals(DisplayButton.CONFIRM, ScreenDuoButtonMapper.map(0).button());
+        assertEquals(DisplayButton.LEFT, ScreenDuoButtonMapper.map(1).button());
+        assertEquals(DisplayButton.RIGHT, ScreenDuoButtonMapper.map(2).button());
+        assertEquals(DisplayButton.UP, ScreenDuoButtonMapper.map(3).button());
+        assertEquals(DisplayButton.DOWN, ScreenDuoButtonMapper.map(4).button());
+        assertEquals(DisplayButton.BACK, ScreenDuoButtonMapper.map(6).button());
         assertEquals(DisplayButton.ACTION_1, ScreenDuoButtonMapper.map(12).button());
         assertEquals(DisplayButton.ACTION_2, ScreenDuoButtonMapper.map(13).button());
     }
