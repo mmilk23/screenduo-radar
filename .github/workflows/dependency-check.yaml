@@ -37,7 +37,7 @@ jobs:
 
       - name: Restore OWASP Dependency-Check data
         id: dependency-check-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.DEPENDENCY_CHECK_CACHE }}
           key: dependency-check-data-v4-${{ runner.os }}-${{ steps.cache-key.outputs.week }}-${{ github.run_id }}
@@ -127,7 +127,7 @@ jobs:
 
       - name: Save OWASP Dependency-Check data
         if: success() && github.event_name != 'pull_request'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.DEPENDENCY_CHECK_CACHE }}
           key: dependency-check-data-v4-${{ runner.os }}-${{ steps.cache-key.outputs.week }}-${{ github.run_id }}
